@@ -2,6 +2,22 @@
 
 TopToDo is a small macOS Todo app written in Swift and SwiftUI. It supports adding tasks, listing tasks, marking tasks complete, deleting tasks, and saving todos between launches.
 
+## Download
+
+Pre-built DMG is available on the [Releases page](../../releases).
+
+| File | Size | SHA256 |
+| --- | --- | --- |
+| [TopToDo-1.0.0.dmg](../../releases/download/v1.0.0/TopToDo-1.0.0.dmg) | 922 KB | `65e42b8d605dcde6af496929a9f070662d9309c60cd4f4ace0c044ac5bbff210` |
+
+Verify the download:
+
+```sh
+shasum -a 256 TopToDo-1.0.0.dmg
+```
+
+After mounting the DMG, drag `TopToDo.app` into the Applications folder. The build is currently signed with an ad-hoc signature, so on first launch macOS will ask you to confirm in **System Settings → Privacy & Security**.
+
 ## Requirements
 
 - macOS 14 or later
