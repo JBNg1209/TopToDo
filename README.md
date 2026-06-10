@@ -2,13 +2,15 @@
 
 TopToDo is a small macOS Todo app written in Swift and SwiftUI. It supports adding tasks, listing tasks, marking tasks complete, deleting tasks, and saving todos between launches.
 
+The app is built around the "less is more" philosophy: a persistent 5-slot Today Top5 for the things that matter most, plus a longer-term Task Pool of up to 30 tasks. Neither list auto-resets — what you add stays until you complete, move, or delete it.
+
 ## Download
 
 Pre-built DMG is available on the [Releases page](../../releases).
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| [TopToDo-1.0.0.dmg](../../releases/download/v1.0.0/TopToDo-1.0.0.dmg) | 922 KB | `65e42b8d605dcde6af496929a9f070662d9309c60cd4f4ace0c044ac5bbff210` |
+| [TopToDo-1.1.0.dmg](../../releases/download/v1.1.0/TopToDo-1.1.0.dmg) | 933 KB | `30c51da611074dff7d9a2ce469b2c5f970c6f64734b0144c814c8dd5fc8b450d` |
 
 Verify the download:
 
@@ -54,11 +56,14 @@ swift build
 
 ## Features
 
-- Add a task with the text field or Return key.
-- View all tasks in a native macOS list.
-- Click a task row to mark it complete or open again.
-- Delete tasks from the list.
-- Persist tasks at `~/Library/Application Support/TopToDo/todos.json`.
+- **Today Top5** — a persistent 5-slot list. Tasks you add stay until you complete, move, or delete them; no midnight auto-reset.
+- **Task Pool** — up to 30 long-term tasks. One click moves a task between Top5 and the Pool.
+- **Inline editing** — click any task to edit; commit on focus loss or Return.
+- **Empty-title guard** — saving a blank title is rejected with an alert, so the only way to remove a task is the trash button.
+- **Trilingual UI** — English / 简体中文 / 繁體中文.
+- **Adjustable font size** — Small / Medium / Large / Extra Large, applies to the whole app except the screen title.
+- **Adjustable language** — switchable from the top-right of the window, no relaunch needed.
+- **Persisted at** `~/Library/Application Support/TopToDo/todos.json.
 
 ## Project Structure
 

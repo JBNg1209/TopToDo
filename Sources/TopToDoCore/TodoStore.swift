@@ -2,10 +2,10 @@ import Foundation
 
 public final class TodoStore: ObservableObject {
     public static let baseTodayLimit = 5
-    public static let topLimit = 10
+    public static let taskPoolLimit = 30
 
     @Published public private(set) var todayItems: [TodoItem]
-    @Published public private(set) var topItems: [TodoItem]
+    @Published public private(set) var taskPoolItems: [TodoItem]
 
     private let persistenceURL: URL?
     private let encoder: JSONEncoder
@@ -16,7 +16,7 @@ public final class TodoStore: ObservableObject {
 
     public init(
         todayItems: [TodoItem]? = nil,
-        topItems: [TodoItem] = [],
+        taskPoolItems: [TodoItem] = [],
         persistenceURL: URL? = TodoStore.defaultPersistenceURL(),
         calendar: Calendar = .current,
         now: @escaping () -> Date = Date.init
@@ -37,19 +37,19 @@ public final class TodoStore: ObservableObject {
         let currentDayKey = Self.dayKey(for: now(), calendar: calendar)
         todayKey = currentDayKey
 
-        if todayItems != nil || !topItems.isEmpty {
+        if todayItems != nil || !taskPoolItems.isEmpty {
             self.todayItems = Self.normalizedTodayItems(todayItems ?? [], limit: Self.baseTodayLimit)
-            self.topItems = Array(topItems.prefix(Self.topLimit))
+            self.taskPoolItems = Array(taskPoolItems.prefix(Self.taskPoolLimit))
             return
         }
 
         guard let persistenceURL, let savedState = Self.load(from: persistenceURL, decoder: decoder) else {
             self.todayItems = Self.emptyTodayItems(count: Self.baseTodayLimit)
-            self.topItems = []
+            self.taskPoolItems = []
             return
         }
 
-        self.topItems = Array(savedState.topItems.prefix(Self.topLimit))
+        self.taskPoolItems = Array(savedState.taskPoolItems.prefix(Self.taskPoolLimit))
         if savedState.todayKey == currentDayKey {
             self.todayItems = Self.normalizedTodayItems(savedState.todayItems, limit: Self.baseTodayLimit)
         } else {
@@ -68,20 +68,13 @@ public final class TodoStore: ObservableObject {
         return (activeItems.count - completed, completed)
     }
 
-    public var topSummary: (open: Int, completed: Int) {
-        let completed = topItems.count(where: \.isCompleted)
-        return (topItems.count - completed, completed)
+    public var taskPoolSummary: (open: Int, completed: Int) {
+        let completed = taskPoolItems.count(where: \.isCompleted)
+        return (taskPoolItems.count - completed, completed)
     }
 
     public func refreshForNewDayIfNeeded() {
-        let currentDayKey = Self.dayKey(for: now(), calendar: calendar)
-        guard currentDayKey != todayKey else {
-            return
-        }
-
-        todayKey = currentDayKey
-        todayItems = Self.emptyTodayItems(count: Self.baseTodayLimit)
-        save()
+        // Today items are now persistent across days — no auto-reset at midnight.
     }
 
     public func updateTodayTitle(id: TodoItem.ID, title rawTitle: String) {
@@ -124,9 +117,9 @@ public final class TodoStore: ObservableObject {
     }
 
     @discardableResult
-    public func moveTodayItemToTop(id: TodoItem.ID) -> TodoItem? {
+    public func moveTodayItemToTaskPool(id: TodoItem.ID) -> TodoItem? {
         refreshForNewDayIfNeeded()
-        guard topItems.count < Self.topLimit,
+        guard taskPoolItems.count < Self.taskPoolLimit,
               let index = todayItems.firstIndex(where: { $0.id == id })
         else {
             return nil
@@ -138,20 +131,20 @@ public final class TodoStore: ObservableObject {
         }
 
         let item = TodoItem(title: title)
-        topItems.insert(item, at: 0)
+        taskPoolItems.insert(item, at: 0)
         todayItems[index] = Self.emptyTodayItem()
         save()
         return item
     }
 
     @discardableResult
-    public func moveTopItemToToday(id: TodoItem.ID) -> TodoItem? {
+    public func moveTaskPoolItemToToday(id: TodoItem.ID) -> TodoItem? {
         refreshForNewDayIfNeeded()
-        guard let topIndex = topItems.firstIndex(where: { $0.id == id }) else {
+        guard let poolIndex = taskPoolItems.firstIndex(where: { $0.id == id }) else {
             return nil
         }
 
-        let title = topItems[topIndex].title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = taskPoolItems[poolIndex].title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty,
               let emptyIndex = todayItems.firstIndex(where: { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
         else {
@@ -160,14 +153,14 @@ public final class TodoStore: ObservableObject {
 
         let item = TodoItem(title: title)
         todayItems[emptyIndex] = item
-        topItems.remove(at: topIndex)
+        taskPoolItems.remove(at: poolIndex)
         save()
         return item
     }
 
     @discardableResult
-    public func addTopItem(title rawTitle: String) -> TodoItem? {
-        guard topItems.count < Self.topLimit else {
+    public func addTaskPoolItem(title rawTitle: String) -> TodoItem? {
+        guard taskPoolItems.count < Self.taskPoolLimit else {
             return nil
         }
 
@@ -177,41 +170,41 @@ public final class TodoStore: ObservableObject {
         }
 
         let item = TodoItem(title: title)
-        topItems.insert(item, at: 0)
+        taskPoolItems.insert(item, at: 0)
         save()
         return item
     }
 
-    public func updateTopTitle(id: TodoItem.ID, title rawTitle: String) {
-        guard let index = topItems.firstIndex(where: { $0.id == id }) else {
+    public func updateTaskPoolTitle(id: TodoItem.ID, title rawTitle: String) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        topItems[index].title = rawTitle
+        taskPoolItems[index].title = rawTitle
         save()
     }
 
-    public func completeTopItem(id: TodoItem.ID) {
-        toggleTopItemCompletion(id: id)
+    public func completeTaskPoolItem(id: TodoItem.ID) {
+        toggleTaskPoolItemCompletion(id: id)
     }
 
-    public func toggleTopItemCompletion(id: TodoItem.ID) {
-        guard let index = topItems.firstIndex(where: { $0.id == id }),
-              !topItems[index].title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    public func toggleTaskPoolItemCompletion(id: TodoItem.ID) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }),
+              !taskPoolItems[index].title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
             return
         }
 
-        topItems[index].isCompleted.toggle()
+        taskPoolItems[index].isCompleted.toggle()
         save()
     }
 
-    public func removeTopItem(id: TodoItem.ID) {
-        guard let index = topItems.firstIndex(where: { $0.id == id }) else {
+    public func removeTaskPoolItem(id: TodoItem.ID) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        topItems.remove(at: index)
+        taskPoolItems.remove(at: index)
         save()
     }
 
@@ -226,7 +219,7 @@ public final class TodoStore: ObservableObject {
             let state = TodoPersistenceState(
                 todayKey: todayKey,
                 todayItems: todayItems,
-                topItems: topItems
+                taskPoolItems: taskPoolItems
             )
             let data = try encoder.encode(state)
             try data.write(to: persistenceURL, options: [.atomic])
@@ -250,10 +243,10 @@ public final class TodoStore: ObservableObject {
             return TodoPersistenceState(
                 todayKey: "",
                 todayItems: [],
-                topItems: Array(legacyItems.prefix(Self.topLimit))
+                taskPoolItems: Array(legacyItems.prefix(Self.taskPoolLimit))
             )
         } catch {
-            assertionFailure("Unable to load todos: \(error)")
+            NSLog("TopToDo: Unable to load todos — starting fresh. \(error)")
             return nil
         }
     }
@@ -316,5 +309,40 @@ public final class TodoStore: ObservableObject {
 private struct TodoPersistenceState: Codable {
     var todayKey: String
     var todayItems: [TodoItem]
-    var topItems: [TodoItem]
+    var taskPoolItems: [TodoItem]
+
+    private enum CodingKeys: String, CodingKey {
+        case todayKey
+        case todayItems
+        case taskPoolItems
+        case topItems  // legacy key from pre-TaskPool renames
+    }
+
+    init(todayKey: String, todayItems: [TodoItem], taskPoolItems: [TodoItem]) {
+        self.todayKey = todayKey
+        self.todayItems = todayItems
+        self.taskPoolItems = taskPoolItems
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.todayKey = try container.decode(String.self, forKey: .todayKey)
+        self.todayItems = try container.decode([TodoItem].self, forKey: .todayItems)
+        // Accept either the new "taskPoolItems" or the legacy "topItems" key so existing
+        // user data migrates transparently across the rename.
+        if let pool = try? container.decode([TodoItem].self, forKey: .taskPoolItems) {
+            self.taskPoolItems = pool
+        } else if let legacy = try? container.decode([TodoItem].self, forKey: .topItems) {
+            self.taskPoolItems = legacy
+        } else {
+            self.taskPoolItems = []
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(todayKey, forKey: .todayKey)
+        try container.encode(todayItems, forKey: .todayItems)
+        try container.encode(taskPoolItems, forKey: .taskPoolItems)
+    }
 }

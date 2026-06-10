@@ -3,7 +3,7 @@ import SwiftUI
 
 private enum TodoTag: String, CaseIterable, Identifiable {
     case today
-    case top
+    case taskPool
 
     var id: String {
         rawValue
@@ -13,8 +13,8 @@ private enum TodoTag: String, CaseIterable, Identifiable {
         switch self {
         case .today:
             strings.todayTag
-        case .top:
-            strings.backlogTag
+        case .taskPool:
+            strings.taskPoolTag
         }
     }
 }
@@ -25,10 +25,13 @@ struct TodoListView: View {
     @AppStorage("appFontSizeRawValue") private var fontSizeRawValue: String = FontSize.medium.rawValue
     @Environment(\.fontScale) private var fontScale
     @State private var selectedTag: TodoTag = .today
-    @State private var newTopTitle = ""
+    @State private var newTaskPoolTitle = ""
     @State private var newTodayTitle = ""
     @State private var showTodayLimitAlert = false
-    @State private var showLongTermLimitAlert = false
+    @State private var showTaskPoolLimitAlert = false
+    @State private var showEmptyTitleAlert = false
+    @State private var editingTodayId: UUID?
+    @State private var editingTaskPoolId: UUID?
 
     private var language: AppLanguage {
         AppLanguage(rawValue: selectedLanguageCode) ?? .english
@@ -63,26 +66,28 @@ struct TodoListView: View {
                 switch selectedTag {
                 case .today:
                     todayView
-                case .top:
-                    topView
+                case .taskPool:
+                    taskPoolView
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .padding(20)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear {
-            store.refreshForNewDayIfNeeded()
-        }
         .alert(strings.todayLimitTitle, isPresented: $showTodayLimitAlert) {
             Button(strings.okButton, role: .cancel) {}
         } message: {
             Text(strings.todayLimitMessage)
         }
-        .alert(strings.backlogLimitTitle, isPresented: $showLongTermLimitAlert) {
+        .alert(strings.taskPoolLimitTitle, isPresented: $showTaskPoolLimitAlert) {
             Button(strings.okButton, role: .cancel) {}
         } message: {
-            Text(strings.backlogLimitMessage)
+            Text(strings.taskPoolLimitMessage)
+        }
+        .alert(strings.emptyTitleAlertTitle, isPresented: $showEmptyTitleAlert) {
+            Button(strings.okButton, role: .cancel) {}
+        } message: {
+            Text(strings.emptyTitleAlertMessage)
         }
     }
 
@@ -186,14 +191,6 @@ struct TodoListView: View {
                 .disabled(newTodayTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: metrics.tagPickerSpacing) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .imageScale(.small)
-                Text(strings.todayResetNote)
-            }
-            .font(.system(size: metrics.captionSize))
-            .foregroundStyle(.secondary)
-
             if store.todayItems.filter({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).isEmpty {
                 ContentUnavailableView(strings.noTodayTasksTitle, systemImage: "tray", description: Text(strings.noTodayTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -207,20 +204,22 @@ struct TodoListView: View {
                                     item: item,
                                     strings: strings,
                                     metrics: metrics,
-                                    canMoveToTop: store.topItems.count < TodoStore.topLimit,
+                                    editingId: $editingTodayId,
+                                    canMoveToTaskPool: store.taskPoolItems.count < TodoStore.taskPoolLimit,
                                     onComplete: {
                                         store.toggleTodayItemCompletion(id: item.id)
                                     },
-                                    onMoveToTop: {
-                                        if store.topItems.count >= TodoStore.topLimit {
-                                            showLongTermLimitAlert = true
+                                    onMoveToTaskPool: {
+                                        if store.taskPoolItems.count >= TodoStore.taskPoolLimit {
+                                            showTaskPoolLimitAlert = true
                                         } else {
-                                            store.moveTodayItemToTop(id: item.id)
+                                            store.moveTodayItemToTaskPool(id: item.id)
                                         }
                                     },
                                     onDelete: {
                                         store.clearTodayItem(id: item.id)
-                                    }
+                                    },
+                                    onEmptyCommitAttempt: { showEmptyTitleAlert = true }
                                 )
                             }
                         }
@@ -230,47 +229,49 @@ struct TodoListView: View {
         }
     }
 
-    private var topView: some View {
+    private var taskPoolView: some View {
         VStack(alignment: .leading, spacing: metrics.comfortableSpacing) {
             HStack(spacing: metrics.compactSpacing) {
-                TextField(strings.newBacklogTaskPlaceholder, text: $newTopTitle)
+                TextField(strings.newTaskPoolTaskPlaceholder, text: $newTaskPoolTitle)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: metrics.bodySize))
-                    .onSubmit(addTopTask)
+                    .onSubmit(addTaskPoolTask)
 
-                Button(action: addTopTask) {
+                Button(action: addTaskPoolTask) {
                     Label(strings.newButton, systemImage: "plus")
                         .font(.system(size: metrics.bodySize))
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(newTopTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(newTaskPoolTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if store.topItems.isEmpty {
-                ContentUnavailableView(strings.noBacklogTasksTitle, systemImage: "tray", description: Text(strings.noBacklogTasksDescription))
+            if store.taskPoolItems.isEmpty {
+                ContentUnavailableView(strings.noTaskPoolTasksTitle, systemImage: "tray", description: Text(strings.noTaskPoolTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.compactSpacing) {
-                        ForEach(store.topItems) { item in
+                        ForEach(store.taskPoolItems) { item in
                             TopTaskRow(
                                 item: item,
                                 strings: strings,
                                 metrics: metrics,
+                                editingId: $editingTaskPoolId,
                                 canMoveToToday: store.todayItems.contains(where: { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
                                 onComplete: {
-                                    store.toggleTopItemCompletion(id: item.id)
+                                    store.toggleTaskPoolItemCompletion(id: item.id)
                                 },
                                 onMoveToToday: {
                                     if store.todayItems.allSatisfy({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
                                         showTodayLimitAlert = true
                                     } else {
-                                        store.moveTopItemToToday(id: item.id)
+                                        store.moveTaskPoolItemToToday(id: item.id)
                                     }
                                 },
                                 onDelete: {
-                                    store.removeTopItem(id: item.id)
-                                }
+                                    store.removeTaskPoolItem(id: item.id)
+                                },
+                                onEmptyCommitAttempt: { showEmptyTitleAlert = true }
                             )
                         }
                     }
@@ -283,31 +284,33 @@ struct TodoListView: View {
         switch selectedTag {
         case .today:
             strings.todaySummary(open: store.todaySummary.open, completed: store.todaySummary.completed)
-        case .top:
-            strings.backlogSummary(count: store.topItems.count, limit: TodoStore.topLimit)
+        case .taskPool:
+            strings.taskPoolSummary(count: store.taskPoolItems.count, limit: TodoStore.taskPoolLimit)
         }
     }
 
-    private func addTopTask() {
-        let trimmedTitle = newTopTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func addTaskPoolTask() {
+        let trimmedTitle = newTaskPoolTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
             return
         }
 
-        if store.topItems.count >= TodoStore.topLimit {
-            showLongTermLimitAlert = true
+        if store.taskPoolItems.count >= TodoStore.taskPoolLimit {
+            showTaskPoolLimitAlert = true
             return
         }
 
-        commitTopTask()
+        commitTaskPoolTask()
     }
 
-    private func commitTopTask() {
-        guard store.addTopItem(title: newTopTitle) != nil else {
+    private func commitTaskPoolTask() {
+        guard let newItem = store.addTaskPoolItem(title: newTaskPoolTitle) else {
             return
         }
 
-        newTopTitle = ""
+        newTaskPoolTitle = ""
+        // Drop the new task straight into edit mode so the user can keep typing.
+        editingTaskPoolId = newItem.id
     }
 
     private func addTodayTask() {
@@ -331,6 +334,8 @@ struct TodoListView: View {
         }
         store.updateTodayTitle(id: emptyItem.id, title: newTodayTitle)
         newTodayTitle = ""
+        // Drop the new task straight into edit mode so the user can keep typing.
+        editingTodayId = emptyItem.id
     }
 }
 
@@ -339,13 +344,15 @@ private struct TodayTaskRow: View {
     let item: TodoItem
     let strings: AppStrings
     let metrics: AppMetrics
+    @Binding var editingId: UUID?
     @EnvironmentObject private var store: TodoStore
     @State private var title: String = ""
-    @FocusState private var isEditing: Bool
-    let canMoveToTop: Bool
+    @State private var isEditing: Bool = false
+    let canMoveToTaskPool: Bool
     let onComplete: () -> Void
-    let onMoveToTop: () -> Void
+    let onMoveToTaskPool: () -> Void
     let onDelete: () -> Void
+    let onEmptyCommitAttempt: () -> Void
 
     private var isEmpty: Bool {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -369,12 +376,13 @@ private struct TodayTaskRow: View {
                 onCommit: commitEdit
             )
 
-            Button(action: onMoveToTop) {
-                Image(systemName: "arrow.up.right.square")
+            Button(action: onMoveToTaskPool) {
+                // "Send to the list on the right" — simple right arrow.
+                Image(systemName: "arrow.right")
             }
             .buttonStyle(.borderless)
             .disabled(isEmpty)
-            .help(canMoveToTop ? strings.moveToBacklogHelp : strings.backlogFullHelp)
+            .help(canMoveToTaskPool ? strings.moveToTaskPoolHelp : strings.taskPoolFullHelp)
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
@@ -385,12 +393,24 @@ private struct TodayTaskRow: View {
         .frame(height: metrics.rowHeight)
         .onAppear {
             title = item.title
+            if editingId == item.id {
+                isEditing = true
+            }
         }
         .onChange(of: item.title) { _, newValue in
             title = newValue
         }
         .onChange(of: isEditing) { _, newValue in
             if !newValue {
+                if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Reject: keep the user in edit mode and surface an alert.
+                    isEditing = true
+                    onEmptyCommitAttempt()
+                    return
+                }
+                if editingId == item.id {
+                    editingId = nil
+                }
                 commitEdit()
             }
         }
@@ -407,13 +427,15 @@ private struct TopTaskRow: View {
     let item: TodoItem
     let strings: AppStrings
     let metrics: AppMetrics
+    @Binding var editingId: UUID?
     @EnvironmentObject private var store: TodoStore
     @State private var title: String = ""
-    @FocusState private var isEditing: Bool
+    @State private var isEditing: Bool = false
     let canMoveToToday: Bool
     let onComplete: () -> Void
     let onMoveToToday: () -> Void
     let onDelete: () -> Void
+    let onEmptyCommitAttempt: () -> Void
 
     var body: some View {
         HStack(spacing: metrics.compactSpacing) {
@@ -434,7 +456,8 @@ private struct TopTaskRow: View {
             )
 
             Button(action: onMoveToToday) {
-                Image(systemName: "arrow.down.to.line")
+                // "Send to the list on the left" — mirrors the right arrow on Today rows.
+                Image(systemName: "arrow.left")
             }
             .buttonStyle(.borderless)
             .help(canMoveToToday ? strings.moveToTodayHelp : strings.todayFullForMoveHelp)
@@ -448,12 +471,24 @@ private struct TopTaskRow: View {
         .frame(height: metrics.rowHeight)
         .onAppear {
             title = item.title
+            if editingId == item.id {
+                isEditing = true
+            }
         }
         .onChange(of: item.title) { _, newValue in
             title = newValue
         }
         .onChange(of: isEditing) { _, newValue in
             if !newValue {
+                if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Reject: keep the user in edit mode and surface an alert.
+                    isEditing = true
+                    onEmptyCommitAttempt()
+                    return
+                }
+                if editingId == item.id {
+                    editingId = nil
+                }
                 commitEdit()
             }
         }
@@ -461,7 +496,7 @@ private struct TopTaskRow: View {
 
     private func commitEdit() {
         if title != item.title {
-            store.updateTopTitle(id: item.id, title: title)
+            store.updateTaskPoolTitle(id: item.id, title: title)
         }
     }
 }
@@ -470,40 +505,64 @@ private struct EditableTaskTitle: View {
     let placeholder: String
     @Binding var title: String
     let isCompleted: Bool
-    @FocusState.Binding var isEditing: Bool
+    @Binding var isEditing: Bool
     let metrics: AppMetrics
     let onCommit: () -> Void
 
+    // Local focus state. The parent only knows about `isEditing: Bool`; the child owns
+    // the actual focus binding so it can be re-asserted on demand without going through
+    // the parent's state.
+    @FocusState private var internalFocus: Bool
+
     var body: some View {
-        ZStack(alignment: .leading) {
+        Group {
             if isEditing {
                 TextField(placeholder, text: $title)
+                    .focused($internalFocus)
                     .textFieldStyle(.plain)
-                    .focused($isEditing)
                     .font(.system(size: metrics.bodySize))
                     .strikethrough(isCompleted)
                     .foregroundStyle(isCompleted ? .secondary : .primary)
                     .onSubmit {
                         finishEditing()
                     }
+                    // Focus is set in the same render pass as the TextField being
+                    // introduced. Give SwiftUI a frame to install the first responder,
+                    // then re-assert if the binding didn't catch.
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(20))
+                        if isEditing, !internalFocus {
+                            internalFocus = true
+                        }
+                    }
             } else {
-                Button(action: beginEditing) {
-                    Text(title.isEmpty ? placeholder : title)
-                        .lineLimit(1)
-                        .font(.system(size: metrics.bodySize))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .foregroundStyle(title.isEmpty || isCompleted ? .secondary : .primary)
-                        .strikethrough(isCompleted)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                // Display mode is a plain Text, not a disabled TextField. The Text is
+                // always hit-testable; the tap gesture reliably fires regardless of
+                // any disabled-control quirks upstream.
+                Text(title.isEmpty ? placeholder : title)
+                    .lineLimit(1)
+                    .font(.system(size: metrics.bodySize))
+                    .foregroundStyle(title.isEmpty || isCompleted ? .secondary : .primary)
+                    .strikethrough(isCompleted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isEditing = true
+                    }
             }
         }
         .frame(maxWidth: .infinity, minHeight: metrics.minEditHeight, alignment: .leading)
-    }
-
-    private func beginEditing() {
-        isEditing = true
+        // Parent toggled edit mode (e.g. new task auto-edits) → take focus.
+        .onChange(of: isEditing) { _, newValue in
+            internalFocus = newValue
+        }
+        // User clicked away while editing → propagate focus loss back to the parent so
+        // it can commit and clear the editing id.
+        .onChange(of: internalFocus) { _, newValue in
+            if !newValue, isEditing {
+                isEditing = false
+            }
+        }
     }
 
     private func finishEditing() {

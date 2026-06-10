@@ -40,14 +40,14 @@ struct AppStrings {
         }
     }
 
-    var backlogTag: String {
+    var taskPoolTag: String {
         switch language {
         case .english:
-            "Backlog"
+            "Task Pool"
         case .simplifiedChinese:
-            "长期清单"
+            "任务池"
         case .traditionalChinese:
-            "長期清單"
+            "任務池"
         }
     }
 
@@ -150,25 +150,47 @@ struct AppStrings {
         }
     }
 
-    var backlogLimitTitle: String {
+    var taskPoolLimitTitle: String {
         switch language {
         case .english:
-            "Backlog is Full"
+            "Task Pool is Full"
         case .simplifiedChinese:
-            "长期清单已满"
+            "任务池已满"
         case .traditionalChinese:
-            "長期清單已滿"
+            "任務池已滿"
         }
     }
 
-    var backlogLimitMessage: String {
+    var taskPoolLimitMessage: String {
         switch language {
         case .english:
-            "Remove a task from Backlog to make room."
+            "Remove a task from Task Pool to make room."
         case .simplifiedChinese:
-            "请先删除一个长期任务再继续。"
+            "请先从任务池删除一个任务再继续。"
         case .traditionalChinese:
-            "請先刪除一個長期任務再繼續。"
+            "請先從任務池刪除一個任務再繼續。"
+        }
+    }
+
+    var emptyTitleAlertTitle: String {
+        switch language {
+        case .english:
+            "Title Required"
+        case .simplifiedChinese:
+            "需要标题"
+        case .traditionalChinese:
+            "需要標題"
+        }
+    }
+
+    var emptyTitleAlertMessage: String {
+        switch language {
+        case .english:
+            "A task can't be saved without a title. Add some text, or use the trash button to remove it."
+        case .simplifiedChinese:
+            "任务不能保存为空标题。请添加文字，或用删除按钮移除。"
+        case .traditionalChinese:
+            "任務不能保存為空標題。請添加文字，或用刪除按鈕移除。"
         }
     }
 
@@ -183,14 +205,14 @@ struct AppStrings {
         }
     }
 
-    var newBacklogTaskPlaceholder: String {
+    var newTaskPoolTaskPlaceholder: String {
         switch language {
         case .english:
-            "New long-term task"
+            "New task pool task"
         case .simplifiedChinese:
-            "新增长期任务"
+            "新增任务池任务"
         case .traditionalChinese:
-            "新增長期任務"
+            "新增任務池任務"
         }
     }
 
@@ -202,17 +224,6 @@ struct AppStrings {
             "新增"
         case .traditionalChinese:
             "新增"
-        }
-    }
-
-    var todayResetNote: String {
-        switch language {
-        case .english:
-            "Tasks on this page reset after midnight when you reopen or use the app. Move important unfinished tasks to Backlog."
-        case .simplifiedChinese:
-            "本页任务会在午夜后于下次打开或操作时自动清空。重要的未完成任务可移至长期清单。"
-        case .traditionalChinese:
-            "本頁任務會在午夜後於下次開啟或操作時自動清空。重要的未完成任務可移至長期清單。"
         }
     }
 
@@ -238,25 +249,25 @@ struct AppStrings {
         }
     }
 
-    var noBacklogTasksTitle: String {
+    var noTaskPoolTasksTitle: String {
         switch language {
         case .english:
-            "No Backlog tasks"
+            "No Task Pool tasks"
         case .simplifiedChinese:
-            "暂无长期任务"
+            "暂无任务池任务"
         case .traditionalChinese:
-            "暫無長期任務"
+            "暫無任務池任務"
         }
     }
 
-    var noBacklogTasksDescription: String {
+    var noTaskPoolTasksDescription: String {
         switch language {
         case .english:
-            "Create a long-term task above."
+            "Create a task pool task above."
         case .simplifiedChinese:
-            "在上方创建长期任务。"
+            "在上方创建任务池任务。"
         case .traditionalChinese:
-            "在上方建立長期任務。"
+            "在上方建立任務池任務。"
         }
     }
 
@@ -304,14 +315,14 @@ struct AppStrings {
         }
     }
 
-    var moveToBacklogHelp: String {
+    var moveToTaskPoolHelp: String {
         switch language {
         case .english:
-            "Move to Backlog"
+            "Move to Task Pool"
         case .simplifiedChinese:
-            "移至长期清单"
+            "移至任务池"
         case .traditionalChinese:
-            "移至長期清單"
+            "移至任務池"
         }
     }
 
@@ -337,14 +348,14 @@ struct AppStrings {
         }
     }
 
-    var backlogFullHelp: String {
+    var taskPoolFullHelp: String {
         switch language {
         case .english:
-            "Backlog is full"
+            "Task Pool is full"
         case .simplifiedChinese:
-            "长期清单已满"
+            "任务池已满"
         case .traditionalChinese:
-            "長期清單已滿"
+            "任務池已滿"
         }
     }
 
@@ -359,14 +370,14 @@ struct AppStrings {
         }
     }
 
-    func backlogSummary(count: Int, limit: Int) -> String {
+    func taskPoolSummary(count: Int, limit: Int) -> String {
         switch language {
         case .english:
-            "\(count)/\(limit) backlog tasks"
+            "\(count)/\(limit) task pool tasks"
         case .simplifiedChinese:
-            "\(count)/\(limit) 个长期任务"
+            "\(count)/\(limit) 个任务池任务"
         case .traditionalChinese:
-            "\(count)/\(limit) 個長期任務"
+            "\(count)/\(limit) 個任務池任務"
         }
     }
 
