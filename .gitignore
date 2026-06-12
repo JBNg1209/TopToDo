@@ -1,6 +1,39 @@
 .DS_Store
+
+# Swift Package Manager
 .build/
 .swiftpm/
-dist/
 Package.resolved
+
+# App packaging output
+dist/
+
+# Xcode and macOS local state
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.moved-aside
+
+# Signing, archives, and local release artifacts
+*.xcarchive
+*.dSYM
+*.dmg
+*.zip
+*.app
+*.pkg
+
+# Editor and AI assistant local state
+.vscode/
+.idea/
 .claude/
+.codex/
+PROJECT_CONTEXT.md
+ROADMAP.md
+CHANGELOG.md
+
+# Logs and environment files
+*.log
+.env
+.env.*
+!.env.example

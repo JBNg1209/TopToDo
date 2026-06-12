@@ -19,8 +19,25 @@ private enum TodoTag: String, CaseIterable, Identifiable {
     }
 }
 
+private enum ReminderListKind {
+    case today
+    case taskPool
+}
+
+private struct ReminderEditorState: Identifiable {
+    let listKind: ReminderListKind
+    let taskID: UUID
+    let taskTitle: String
+    let existingAlarmAt: Date?
+
+    var id: UUID {
+        taskID
+    }
+}
+
 struct TodoListView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var alarmScheduler: AlarmScheduler
     @AppStorage("appLanguageCode") private var selectedLanguageCode = AppLanguage.english.rawValue
     @AppStorage("appFontSizeRawValue") private var fontSizeRawValue: String = FontSize.medium.rawValue
     @Environment(\.fontScale) private var fontScale
@@ -32,6 +49,7 @@ struct TodoListView: View {
     @State private var showEmptyTitleAlert = false
     @State private var editingTodayId: UUID?
     @State private var editingTaskPoolId: UUID?
+    @State private var reminderEditor: ReminderEditorState?
 
     private var language: AppLanguage {
         AppLanguage(rawValue: selectedLanguageCode) ?? .english
@@ -52,8 +70,23 @@ struct TodoListView: View {
         )
     }
 
+    private var alarmAlertBinding: Binding<AlarmPresentation?> {
+        Binding(
+            get: { alarmScheduler.presentedAlarm },
+            set: { newValue in
+                if newValue == nil {
+                    alarmScheduler.dismissPresentedAlarm()
+                }
+            }
+        )
+    }
+
     private var strings: AppStrings {
         AppStrings(language: language)
+    }
+
+    private var visibleTodayItems: [TodoItem] {
+        store.todayItems.filter { !$0.title.todoTrimmed.isEmpty }
     }
 
     var body: some View {
@@ -74,6 +107,18 @@ struct TodoListView: View {
         }
         .padding(20)
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(item: $reminderEditor) { editor in
+            ReminderEditorSheet(
+                editor: editor,
+                strings: strings,
+                metrics: metrics,
+                onCancel: { reminderEditor = nil },
+                onSave: { alarmAt in
+                    applyReminder(alarmAt, for: editor)
+                    reminderEditor = nil
+                }
+            )
+        }
         .alert(strings.todayLimitTitle, isPresented: $showTodayLimitAlert) {
             Button(strings.okButton, role: .cancel) {}
         } message: {
@@ -89,12 +134,20 @@ struct TodoListView: View {
         } message: {
             Text(strings.emptyTitleAlertMessage)
         }
+        .alert(item: alarmAlertBinding) { alarm in
+            Alert(
+                title: Text(strings.reminderAlertTitle),
+                message: Text(strings.reminderAlertMessage(taskTitle: alarm.taskTitle)),
+                dismissButton: .default(Text(strings.okButton)) {
+                    alarmScheduler.dismissPresentedAlarm()
+                }
+            )
+        }
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: metrics.spaciousSpacing) {
             VStack(alignment: .leading, spacing: metrics.tinySpacing) {
-                // Title stays at a fixed 28pt regardless of font size preference.
                 Text(selectedTag.title(using: strings))
                     .font(.system(size: 28, weight: .bold))
                 Text(summary)
@@ -188,40 +241,62 @@ struct TodoListView: View {
                         .font(.system(size: metrics.bodySize))
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(newTodayTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(newTodayTitle.todoTrimmed.isEmpty)
             }
 
-            if store.todayItems.filter({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).isEmpty {
+            if visibleTodayItems.isEmpty {
                 ContentUnavailableView(strings.noTodayTasksTitle, systemImage: "tray", description: Text(strings.noTodayTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.standardSpacing) {
-                        ForEach(Array(store.todayItems.enumerated()), id: \.element.id) { index, item in
-                            if !item.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                TodayTaskRow(
-                                    index: index,
-                                    item: item,
-                                    strings: strings,
-                                    metrics: metrics,
-                                    editingId: $editingTodayId,
-                                    canMoveToTaskPool: store.taskPoolItems.count < TodoStore.taskPoolLimit,
-                                    onComplete: {
-                                        store.toggleTodayItemCompletion(id: item.id)
-                                    },
-                                    onMoveToTaskPool: {
-                                        if store.taskPoolItems.count >= TodoStore.taskPoolLimit {
-                                            showTaskPoolLimitAlert = true
-                                        } else {
-                                            store.moveTodayItemToTaskPool(id: item.id)
-                                        }
-                                    },
-                                    onDelete: {
-                                        store.clearTodayItem(id: item.id)
-                                    },
-                                    onEmptyCommitAttempt: { showEmptyTitleAlert = true }
-                                )
-                            }
+                        ForEach(Array(visibleTodayItems.enumerated()), id: \.element.id) { index, item in
+                            TodayTaskRow(
+                                displayIndex: index,
+                                itemCount: visibleTodayItems.count,
+                                item: item,
+                                strings: strings,
+                                metrics: metrics,
+                                editingId: $editingTodayId,
+                                canMoveToTaskPool: store.taskPoolItems.count < TodoStore.taskPoolLimit,
+                                onComplete: {
+                                    store.toggleTodayItemCompletion(id: item.id)
+                                },
+                                onMoveToTaskPool: {
+                                    if store.taskPoolItems.count >= TodoStore.taskPoolLimit {
+                                        showTaskPoolLimitAlert = true
+                                    } else {
+                                        store.moveTodayItemToTaskPool(id: item.id)
+                                    }
+                                },
+                                onToggleHighlight: {
+                                    store.toggleTodayHighlight(id: item.id)
+                                },
+                                onMoveToTop: {
+                                    store.moveTodayItemToTop(id: item.id)
+                                },
+                                onMoveUp: {
+                                    store.moveTodayItemUp(id: item.id)
+                                },
+                                onMoveDown: {
+                                    store.moveTodayItemDown(id: item.id)
+                                },
+                                onEditReminder: {
+                                    reminderEditor = ReminderEditorState(
+                                        listKind: .today,
+                                        taskID: item.id,
+                                        taskTitle: item.title.todoTrimmed,
+                                        existingAlarmAt: item.alarmAt
+                                    )
+                                },
+                                onClearReminder: {
+                                    store.clearTodayAlarm(id: item.id)
+                                },
+                                onDelete: {
+                                    store.clearTodayItem(id: item.id)
+                                },
+                                onEmptyCommitAttempt: { showEmptyTitleAlert = true }
+                            )
                         }
                     }
                 }
@@ -242,7 +317,7 @@ struct TodoListView: View {
                         .font(.system(size: metrics.bodySize))
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(newTaskPoolTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(newTaskPoolTitle.todoTrimmed.isEmpty)
             }
 
             if store.taskPoolItems.isEmpty {
@@ -251,22 +326,47 @@ struct TodoListView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.compactSpacing) {
-                        ForEach(store.taskPoolItems) { item in
-                            TopTaskRow(
+                        ForEach(Array(store.taskPoolItems.enumerated()), id: \.element.id) { index, item in
+                            TaskPoolTaskRow(
+                                displayIndex: index,
+                                itemCount: store.taskPoolItems.count,
                                 item: item,
                                 strings: strings,
                                 metrics: metrics,
                                 editingId: $editingTaskPoolId,
-                                canMoveToToday: store.todayItems.contains(where: { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+                                canMoveToToday: store.todayItems.contains(where: { $0.title.todoTrimmed.isEmpty }),
                                 onComplete: {
                                     store.toggleTaskPoolItemCompletion(id: item.id)
                                 },
                                 onMoveToToday: {
-                                    if store.todayItems.allSatisfy({ !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                                    if store.todayItems.allSatisfy({ !$0.title.todoTrimmed.isEmpty }) {
                                         showTodayLimitAlert = true
                                     } else {
                                         store.moveTaskPoolItemToToday(id: item.id)
                                     }
+                                },
+                                onToggleHighlight: {
+                                    store.toggleTaskPoolHighlight(id: item.id)
+                                },
+                                onMoveToTop: {
+                                    store.moveTaskPoolItemToTop(id: item.id)
+                                },
+                                onMoveUp: {
+                                    store.moveTaskPoolItemUp(id: item.id)
+                                },
+                                onMoveDown: {
+                                    store.moveTaskPoolItemDown(id: item.id)
+                                },
+                                onEditReminder: {
+                                    reminderEditor = ReminderEditorState(
+                                        listKind: .taskPool,
+                                        taskID: item.id,
+                                        taskTitle: item.title.todoTrimmed,
+                                        existingAlarmAt: item.alarmAt
+                                    )
+                                },
+                                onClearReminder: {
+                                    store.clearTaskPoolAlarm(id: item.id)
                                 },
                                 onDelete: {
                                     store.removeTaskPoolItem(id: item.id)
@@ -290,8 +390,7 @@ struct TodoListView: View {
     }
 
     private func addTaskPoolTask() {
-        let trimmedTitle = newTaskPoolTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else {
+        guard !newTaskPoolTitle.todoTrimmed.isEmpty else {
             return
         }
 
@@ -300,47 +399,46 @@ struct TodoListView: View {
             return
         }
 
-        commitTaskPoolTask()
-    }
-
-    private func commitTaskPoolTask() {
         guard let newItem = store.addTaskPoolItem(title: newTaskPoolTitle) else {
             return
         }
 
         newTaskPoolTitle = ""
-        // Drop the new task straight into edit mode so the user can keep typing.
         editingTaskPoolId = newItem.id
     }
 
     private func addTodayTask() {
-        let trimmedTitle = newTodayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else {
+        guard !newTodayTitle.todoTrimmed.isEmpty else {
             return
         }
 
-        let nonEmptyCount = store.todayItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
-        if nonEmptyCount >= store.todayLimit {
+        if visibleTodayItems.count >= store.todayLimit {
             showTodayLimitAlert = true
             return
         }
 
-        commitTodayTask()
-    }
-
-    private func commitTodayTask() {
-        guard let emptyItem = store.todayItems.first(where: { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+        guard let emptyItem = store.todayItems.first(where: { $0.title.todoTrimmed.isEmpty }) else {
             return
         }
+
         store.updateTodayTitle(id: emptyItem.id, title: newTodayTitle)
         newTodayTitle = ""
-        // Drop the new task straight into edit mode so the user can keep typing.
         editingTodayId = emptyItem.id
+    }
+
+    private func applyReminder(_ alarmAt: Date, for editor: ReminderEditorState) {
+        switch editor.listKind {
+        case .today:
+            store.setTodayAlarm(id: editor.taskID, alarmAt: alarmAt)
+        case .taskPool:
+            store.setTaskPoolAlarm(id: editor.taskID, alarmAt: alarmAt)
+        }
     }
 }
 
 private struct TodayTaskRow: View {
-    let index: Int
+    let displayIndex: Int
+    let itemCount: Int
     let item: TodoItem
     let strings: AppStrings
     let metrics: AppMetrics
@@ -351,44 +449,44 @@ private struct TodayTaskRow: View {
     let canMoveToTaskPool: Bool
     let onComplete: () -> Void
     let onMoveToTaskPool: () -> Void
+    let onToggleHighlight: () -> Void
+    let onMoveToTop: () -> Void
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onEditReminder: () -> Void
+    let onClearReminder: () -> Void
     let onDelete: () -> Void
     let onEmptyCommitAttempt: () -> Void
 
-    private var isEmpty: Bool {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     var body: some View {
         HStack(spacing: metrics.compactSpacing) {
-            Button(action: onComplete) {
-                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.isCompleted ? .green : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+            completionButton
 
             EditableTaskTitle(
-                placeholder: strings.todayTaskPlaceholder(index: index + 1),
+                placeholder: strings.todayTaskPlaceholder(index: displayIndex + 1),
                 title: $title,
                 isCompleted: item.isCompleted,
-                isEditing: $isEditing,
+                isHighlighted: item.isHighlighted,
                 metrics: metrics,
+                isEditing: $isEditing,
                 onCommit: commitEdit
             )
 
-            Button(action: onMoveToTaskPool) {
-                // "Send to the list on the right" — simple right arrow.
-                Image(systemName: "arrow.right")
-            }
-            .buttonStyle(.borderless)
-            .disabled(isEmpty)
-            .help(canMoveToTaskPool ? strings.moveToTaskPoolHelp : strings.taskPoolFullHelp)
+            reminderStatus
 
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help(strings.deleteTaskHelp)
+            visibleActions
+
+            TaskMoreMenu(
+                strings: strings,
+                canMoveUp: displayIndex > 0,
+                canMoveDown: displayIndex < itemCount - 1,
+                hasAlarm: item.alarmAt != nil,
+                onMoveUp: onMoveUp,
+                onMoveDown: onMoveDown,
+                onEditReminder: onEditReminder,
+                onClearReminder: onClearReminder,
+                onDelete: onDelete
+            )
         }
         .frame(height: metrics.rowHeight)
         .onAppear {
@@ -402,8 +500,7 @@ private struct TodayTaskRow: View {
         }
         .onChange(of: isEditing) { _, newValue in
             if !newValue {
-                if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    // Reject: keep the user in edit mode and surface an alert.
+                if title.todoTrimmed.isEmpty {
                     isEditing = true
                     onEmptyCommitAttempt()
                     return
@@ -413,6 +510,56 @@ private struct TodayTaskRow: View {
                 }
                 commitEdit()
             }
+        }
+    }
+
+    private var completionButton: some View {
+        Button(action: onComplete) {
+            Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.isCompleted ? .green : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+    }
+
+    private var visibleActions: some View {
+        HStack(spacing: metrics.tinySpacing) {
+            HoverHelpIconButton(
+                helpText: canMoveToTaskPool ? strings.moveToTaskPoolHelp : strings.taskPoolFullHelp,
+                isEnabled: canMoveToTaskPool,
+                label: {
+                    Image(systemName: "arrow.right")
+                },
+                action: {
+                    onMoveToTaskPool()
+                }
+            )
+
+            Button(action: onToggleHighlight) {
+                Image(systemName: item.isHighlighted ? "flag.fill" : "flag")
+                    .foregroundStyle(item.isHighlighted ? Color.red : Color.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(item.isHighlighted ? strings.removeHighlightHelp : strings.highlightTaskHelp)
+
+            Button(action: onMoveToTop) {
+                Image(systemName: "arrow.up.to.line")
+            }
+            .buttonStyle(.borderless)
+            .disabled(displayIndex == 0)
+            .help(strings.pinTaskHelp)
+        }
+    }
+
+    @ViewBuilder
+    private var reminderStatus: some View {
+        if let alarmAt = item.alarmAt {
+            Image(systemName: "bell.fill")
+                .font(.system(size: max(10, metrics.captionSize)))
+                .foregroundStyle(.orange)
+                .frame(width: 16)
+                .padding(.trailing, metrics.standardSpacing)
+                .help("\(strings.reminderSetHelp) · \(alarmAt.formatted(date: .abbreviated, time: .shortened))")
         }
     }
 
@@ -423,7 +570,9 @@ private struct TodayTaskRow: View {
     }
 }
 
-private struct TopTaskRow: View {
+private struct TaskPoolTaskRow: View {
+    let displayIndex: Int
+    let itemCount: Int
     let item: TodoItem
     let strings: AppStrings
     let metrics: AppMetrics
@@ -434,39 +583,44 @@ private struct TopTaskRow: View {
     let canMoveToToday: Bool
     let onComplete: () -> Void
     let onMoveToToday: () -> Void
+    let onToggleHighlight: () -> Void
+    let onMoveToTop: () -> Void
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onEditReminder: () -> Void
+    let onClearReminder: () -> Void
     let onDelete: () -> Void
     let onEmptyCommitAttempt: () -> Void
 
     var body: some View {
         HStack(spacing: metrics.compactSpacing) {
-            Button(action: onComplete) {
-                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.isCompleted ? .green : .secondary)
-            }
-            .buttonStyle(.plain)
-            .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+            completionButton
 
             EditableTaskTitle(
                 placeholder: strings.taskPlaceholder,
                 title: $title,
                 isCompleted: item.isCompleted,
-                isEditing: $isEditing,
+                isHighlighted: item.isHighlighted,
                 metrics: metrics,
+                isEditing: $isEditing,
                 onCommit: commitEdit
             )
 
-            Button(action: onMoveToToday) {
-                // "Send to the list on the left" — mirrors the right arrow on Today rows.
-                Image(systemName: "arrow.left")
-            }
-            .buttonStyle(.borderless)
-            .help(canMoveToToday ? strings.moveToTodayHelp : strings.todayFullForMoveHelp)
+            reminderStatus
 
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help(strings.deleteTaskHelp)
+            visibleActions
+
+            TaskMoreMenu(
+                strings: strings,
+                canMoveUp: displayIndex > 0,
+                canMoveDown: displayIndex < itemCount - 1,
+                hasAlarm: item.alarmAt != nil,
+                onMoveUp: onMoveUp,
+                onMoveDown: onMoveDown,
+                onEditReminder: onEditReminder,
+                onClearReminder: onClearReminder,
+                onDelete: onDelete
+            )
         }
         .frame(height: metrics.rowHeight)
         .onAppear {
@@ -480,8 +634,7 @@ private struct TopTaskRow: View {
         }
         .onChange(of: isEditing) { _, newValue in
             if !newValue {
-                if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    // Reject: keep the user in edit mode and surface an alert.
+                if title.todoTrimmed.isEmpty {
                     isEditing = true
                     onEmptyCommitAttempt()
                     return
@@ -491,6 +644,56 @@ private struct TopTaskRow: View {
                 }
                 commitEdit()
             }
+        }
+    }
+
+    private var completionButton: some View {
+        Button(action: onComplete) {
+            Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.isCompleted ? .green : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+    }
+
+    private var visibleActions: some View {
+        HStack(spacing: metrics.tinySpacing) {
+            HoverHelpIconButton(
+                helpText: canMoveToToday ? strings.moveToTodayHelp : strings.todayFullForMoveHelp,
+                isEnabled: canMoveToToday,
+                label: {
+                    Image(systemName: "arrow.left")
+                },
+                action: {
+                    onMoveToToday()
+                }
+            )
+
+            Button(action: onToggleHighlight) {
+                Image(systemName: item.isHighlighted ? "flag.fill" : "flag")
+                    .foregroundStyle(item.isHighlighted ? Color.red : Color.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(item.isHighlighted ? strings.removeHighlightHelp : strings.highlightTaskHelp)
+
+            Button(action: onMoveToTop) {
+                Image(systemName: "arrow.up.to.line")
+            }
+            .buttonStyle(.borderless)
+            .disabled(displayIndex == 0)
+            .help(strings.pinTaskHelp)
+        }
+    }
+
+    @ViewBuilder
+    private var reminderStatus: some View {
+        if let alarmAt = item.alarmAt {
+            Image(systemName: "bell.fill")
+                .font(.system(size: max(10, metrics.captionSize)))
+                .foregroundStyle(.orange)
+                .frame(width: 16)
+                .padding(.trailing, metrics.standardSpacing)
+                .help("\(strings.reminderSetHelp) · \(alarmAt.formatted(date: .abbreviated, time: .shortened))")
         }
     }
 
@@ -505,14 +708,24 @@ private struct EditableTaskTitle: View {
     let placeholder: String
     @Binding var title: String
     let isCompleted: Bool
-    @Binding var isEditing: Bool
+    let isHighlighted: Bool
     let metrics: AppMetrics
+    @Binding var isEditing: Bool
     let onCommit: () -> Void
 
-    // Local focus state. The parent only knows about `isEditing: Bool`; the child owns
-    // the actual focus binding so it can be re-asserted on demand without going through
-    // the parent's state.
     @FocusState private var internalFocus: Bool
+
+    private var titleColor: Color {
+        if title.isEmpty {
+            return .secondary
+        }
+
+        if isHighlighted {
+            return isCompleted ? Color.red.opacity(0.7) : .red
+        }
+
+        return isCompleted ? .secondary : .primary
+    }
 
     var body: some View {
         Group {
@@ -522,13 +735,10 @@ private struct EditableTaskTitle: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: metrics.bodySize))
                     .strikethrough(isCompleted)
-                    .foregroundStyle(isCompleted ? .secondary : .primary)
+                    .foregroundStyle(titleColor)
                     .onSubmit {
                         finishEditing()
                     }
-                    // Focus is set in the same render pass as the TextField being
-                    // introduced. Give SwiftUI a frame to install the first responder,
-                    // then re-assert if the binding didn't catch.
                     .task {
                         try? await Task.sleep(for: .milliseconds(20))
                         if isEditing, !internalFocus {
@@ -536,28 +746,23 @@ private struct EditableTaskTitle: View {
                         }
                     }
             } else {
-                // Display mode is a plain Text, not a disabled TextField. The Text is
-                // always hit-testable; the tap gesture reliably fires regardless of
-                // any disabled-control quirks upstream.
                 Text(title.isEmpty ? placeholder : title)
                     .lineLimit(1)
                     .font(.system(size: metrics.bodySize))
-                    .foregroundStyle(title.isEmpty || isCompleted ? .secondary : .primary)
+                    .foregroundStyle(titleColor)
                     .strikethrough(isCompleted)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        isEditing = true
-                    }
+                    .layoutPriority(1)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isEditing = true
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: metrics.minEditHeight, alignment: .leading)
-        // Parent toggled edit mode (e.g. new task auto-edits) → take focus.
         .onChange(of: isEditing) { _, newValue in
             internalFocus = newValue
         }
-        // User clicked away while editing → propagate focus loss back to the parent so
-        // it can commit and clear the editing id.
         .onChange(of: internalFocus) { _, newValue in
             if !newValue, isEditing {
                 isEditing = false
@@ -568,6 +773,273 @@ private struct EditableTaskTitle: View {
     private func finishEditing() {
         onCommit()
         isEditing = false
+    }
+}
+
+private struct TaskMoreMenu: View {
+    let strings: AppStrings
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let hasAlarm: Bool
+    let onMoveUp: () -> Void
+    let onMoveDown: () -> Void
+    let onEditReminder: () -> Void
+    let onClearReminder: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(strings.setReminderAction, action: onEditReminder)
+
+            if hasAlarm {
+                Button(strings.clearReminderAction, action: onClearReminder)
+            }
+
+            Divider()
+
+            Button(strings.moveUpAction, action: onMoveUp)
+                .disabled(!canMoveUp)
+            Button(strings.moveDownAction, action: onMoveDown)
+                .disabled(!canMoveDown)
+
+            Divider()
+
+            Button(strings.deleteTaskHelp, role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .imageScale(.medium)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(strings.moreActionsHelp)
+    }
+}
+
+private struct HoverHelpIconButton<Label: View>: View {
+    let helpText: String
+    let isEnabled: Bool
+    @ViewBuilder let label: () -> Label
+    let action: () -> Void
+
+    private let hitSize: CGFloat = 30
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(Color.primary.opacity(0.001))
+
+            Button(action: action) {
+                label()
+            }
+            .buttonStyle(.borderless)
+            .disabled(!isEnabled)
+
+            if !isEnabled {
+                Color.clear
+            }
+        }
+        .frame(width: hitSize, height: hitSize)
+        .contentShape(Rectangle())
+        .help(helpText)
+    }
+}
+
+private struct ReminderEditorSheet: View {
+    let editor: ReminderEditorState
+    let strings: AppStrings
+    let metrics: AppMetrics
+    let onCancel: () -> Void
+    let onSave: (Date) -> Void
+
+    @State private var selectedYear: Int
+    @State private var selectedMonth: Int
+    @State private var selectedDay: Int
+    @State private var selectedHour: Int
+    @State private var selectedMinute: Int
+
+    private let calendar: Calendar
+
+    init(
+        editor: ReminderEditorState,
+        strings: AppStrings,
+        metrics: AppMetrics,
+        onCancel: @escaping () -> Void,
+        onSave: @escaping (Date) -> Void
+    ) {
+        self.editor = editor
+        self.strings = strings
+        self.metrics = metrics
+        self.onCancel = onCancel
+        self.onSave = onSave
+        let calendar = Calendar.current
+        self.calendar = calendar
+        let initialDate = Self.normalizedReminderDate(
+            from: editor.existingAlarmAt ?? Date().addingTimeInterval(60 * 60),
+            calendar: calendar
+        )
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: initialDate)
+        _selectedYear = State(initialValue: components.year ?? 2026)
+        _selectedMonth = State(initialValue: components.month ?? 1)
+        _selectedDay = State(initialValue: components.day ?? 1)
+        _selectedHour = State(initialValue: components.hour ?? 0)
+        _selectedMinute = State(initialValue: components.minute ?? 0)
+    }
+
+    private var yearRange: [Int] {
+        let currentYear = calendar.component(.year, from: Date())
+        return Array(currentYear ... (currentYear + 5))
+    }
+
+    private var dayRange: [Int] {
+        let dayCount = calendar.range(
+            of: .day,
+            in: .month,
+            for: calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)) ?? Date()
+        )?.count ?? 31
+        return Array(1 ... dayCount)
+    }
+
+    private var minuteOptions: [Int] {
+        Array(stride(from: 0, through: 55, by: 5))
+    }
+
+    private var composedDate: Date? {
+        calendar.date(
+            from: DateComponents(
+                year: selectedYear,
+                month: selectedMonth,
+                day: min(selectedDay, dayRange.count),
+                hour: selectedHour,
+                minute: selectedMinute
+            )
+        )
+    }
+
+    private var canSave: Bool {
+        guard let composedDate else {
+            return false
+        }
+
+        return composedDate > Date()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: metrics.spaciousSpacing) {
+            Text(strings.reminderEditorTitle)
+                .font(.system(size: 20, weight: .semibold))
+
+            Text(editor.taskTitle)
+                .font(.system(size: metrics.bodySize))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Text(strings.reminderDateLabel)
+                .font(.system(size: metrics.bodySize, weight: .medium))
+
+            HStack(spacing: metrics.compactSpacing) {
+                reminderPicker(title: strings.reminderYearLabel, selection: $selectedYear, options: yearRange) { year in
+                    "\(year)"
+                }
+                reminderPicker(title: strings.reminderMonthLabel, selection: $selectedMonth, options: Array(1 ... 12)) { month in
+                    "\(month)"
+                }
+                reminderPicker(title: strings.reminderDayLabel, selection: $selectedDay, options: dayRange) { day in
+                    "\(day)"
+                }
+            }
+
+            HStack(spacing: metrics.compactSpacing) {
+                reminderPicker(title: strings.reminderHourLabel, selection: $selectedHour, options: Array(0 ... 23)) { hour in
+                    String(format: "%02d", hour)
+                }
+                reminderPicker(title: strings.reminderMinuteLabel, selection: $selectedMinute, options: minuteOptions) { minute in
+                    String(format: "%02d", minute)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if !canSave {
+                Text(strings.reminderMustBeFutureMessage)
+                    .font(.system(size: metrics.captionSize))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Spacer()
+
+                Button(strings.cancelButton, action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+
+                Button(strings.saveButton) {
+                    if let composedDate {
+                        onSave(composedDate)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+        .onChange(of: selectedYear) { _, _ in
+            clampDayIfNeeded()
+        }
+        .onChange(of: selectedMonth) { _, _ in
+            clampDayIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private func reminderPicker<Value: Hashable>(
+        title: String,
+        selection: Binding<Value>,
+        options: [Value],
+        label: @escaping (Value) -> String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: metrics.tinySpacing) {
+            Text(title)
+                .font(.system(size: metrics.captionSize))
+                .foregroundStyle(.secondary)
+
+            Picker(title, selection: selection) {
+                ForEach(options, id: \.self) { value in
+                    Text(label(value)).tag(value)
+                }
+            }
+            .labelsHidden()
+            .frame(minWidth: 72)
+        }
+    }
+
+    private func clampDayIfNeeded() {
+        let maxDay = dayRange.count
+        if selectedDay > maxDay {
+            selectedDay = maxDay
+        }
+    }
+
+    private static func normalizedReminderDate(from date: Date, calendar: Calendar) -> Date {
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let roundedMinute = ((components.minute ?? 0) + 2) / 5 * 5
+        let adjustedDate = calendar.date(
+            from: DateComponents(
+                year: components.year,
+                month: components.month,
+                day: components.day,
+                hour: components.hour,
+                minute: roundedMinute == 60 ? 0 : roundedMinute
+            )
+        ) ?? date
+
+        if roundedMinute == 60 {
+            return calendar.date(byAdding: .hour, value: 1, to: adjustedDate) ?? adjustedDate
+        }
+
+        return adjustedDate
     }
 }
 
@@ -612,5 +1084,11 @@ private struct NativeSegmentedPicker: NSViewRepresentable {
                 }
             }
         }
+    }
+}
+
+private extension String {
+    var todoTrimmed: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

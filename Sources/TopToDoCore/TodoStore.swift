@@ -10,20 +10,13 @@ public final class TodoStore: ObservableObject {
     private let persistenceURL: URL?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private let calendar: Calendar
-    private let now: () -> Date
-    private var todayKey: String
 
     public init(
         todayItems: [TodoItem]? = nil,
         taskPoolItems: [TodoItem] = [],
-        persistenceURL: URL? = TodoStore.defaultPersistenceURL(),
-        calendar: Calendar = .current,
-        now: @escaping () -> Date = Date.init
+        persistenceURL: URL? = TodoStore.defaultPersistenceURL()
     ) {
         self.persistenceURL = persistenceURL
-        self.calendar = calendar
-        self.now = now
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -33,9 +26,6 @@ public final class TodoStore: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
-
-        let currentDayKey = Self.dayKey(for: now(), calendar: calendar)
-        todayKey = currentDayKey
 
         if todayItems != nil || !taskPoolItems.isEmpty {
             self.todayItems = Self.normalizedTodayItems(todayItems ?? [], limit: Self.baseTodayLimit)
@@ -50,15 +40,10 @@ public final class TodoStore: ObservableObject {
         }
 
         self.taskPoolItems = Array(savedState.taskPoolItems.prefix(Self.taskPoolLimit))
-        if savedState.todayKey == currentDayKey {
-            self.todayItems = Self.normalizedTodayItems(savedState.todayItems, limit: Self.baseTodayLimit)
-        } else {
-            self.todayItems = Self.emptyTodayItems(count: Self.baseTodayLimit)
-        }
+        self.todayItems = Self.normalizedTodayItems(savedState.todayItems, limit: Self.baseTodayLimit)
     }
 
     public var todayLimit: Int {
-        refreshForNewDayIfNeeded()
         return Self.baseTodayLimit
     }
 
@@ -73,12 +58,7 @@ public final class TodoStore: ObservableObject {
         return (taskPoolItems.count - completed, completed)
     }
 
-    public func refreshForNewDayIfNeeded() {
-        // Today items are now persistent across days — no auto-reset at midnight.
-    }
-
     public func updateTodayTitle(id: TodoItem.ID, title rawTitle: String) {
-        refreshForNewDayIfNeeded()
         guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
             return
         }
@@ -86,6 +66,7 @@ public final class TodoStore: ObservableObject {
         todayItems[index].title = rawTitle
         if rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             todayItems[index].isCompleted = false
+            todayItems[index].alarmAt = nil
         }
         save()
     }
@@ -95,7 +76,6 @@ public final class TodoStore: ObservableObject {
     }
 
     public func toggleTodayItemCompletion(id: TodoItem.ID) {
-        refreshForNewDayIfNeeded()
         guard let index = todayItems.firstIndex(where: { $0.id == id }),
               !todayItems[index].title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
@@ -103,11 +83,65 @@ public final class TodoStore: ObservableObject {
         }
 
         todayItems[index].isCompleted.toggle()
+        if todayItems[index].isCompleted {
+            todayItems[index].alarmAt = nil
+        }
         save()
     }
 
+    public func toggleTodayHighlight(id: TodoItem.ID) {
+        guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        todayItems[index].isHighlighted.toggle()
+        save()
+    }
+
+    public func setTodayAlarm(id: TodoItem.ID, alarmAt: Date) {
+        guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        todayItems[index].alarmAt = alarmAt
+        save()
+    }
+
+    public func clearTodayAlarm(id: TodoItem.ID) {
+        guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        todayItems[index].alarmAt = nil
+        save()
+    }
+
+    public func moveTodayItemToTop(id: TodoItem.ID) {
+        reorderTodayVisibleItem(id: id, destinationVisibleIndex: 0)
+    }
+
+    public func moveTodayItemUp(id: TodoItem.ID) {
+        guard let currentIndex = visibleTodayItems().firstIndex(where: { $0.id == id }),
+              currentIndex > 0
+        else {
+            return
+        }
+
+        reorderTodayVisibleItem(id: id, destinationVisibleIndex: currentIndex - 1)
+    }
+
+    public func moveTodayItemDown(id: TodoItem.ID) {
+        let visibleItems = visibleTodayItems()
+        guard let currentIndex = visibleItems.firstIndex(where: { $0.id == id }),
+              currentIndex < visibleItems.count - 1
+        else {
+            return
+        }
+
+        reorderTodayVisibleItem(id: id, destinationVisibleIndex: currentIndex + 1)
+    }
+
     public func clearTodayItem(id: TodoItem.ID) {
-        refreshForNewDayIfNeeded()
         guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
             return
         }
@@ -118,7 +152,6 @@ public final class TodoStore: ObservableObject {
 
     @discardableResult
     public func moveTodayItemToTaskPool(id: TodoItem.ID) -> TodoItem? {
-        refreshForNewDayIfNeeded()
         guard taskPoolItems.count < Self.taskPoolLimit,
               let index = todayItems.firstIndex(where: { $0.id == id })
         else {
@@ -130,7 +163,8 @@ public final class TodoStore: ObservableObject {
             return nil
         }
 
-        let item = TodoItem(title: title)
+        var item = todayItems[index]
+        item.title = title
         taskPoolItems.insert(item, at: 0)
         todayItems[index] = Self.emptyTodayItem()
         save()
@@ -139,7 +173,6 @@ public final class TodoStore: ObservableObject {
 
     @discardableResult
     public func moveTaskPoolItemToToday(id: TodoItem.ID) -> TodoItem? {
-        refreshForNewDayIfNeeded()
         guard let poolIndex = taskPoolItems.firstIndex(where: { $0.id == id }) else {
             return nil
         }
@@ -151,7 +184,8 @@ public final class TodoStore: ObservableObject {
             return nil
         }
 
-        let item = TodoItem(title: title)
+        var item = taskPoolItems[poolIndex]
+        item.title = title
         todayItems[emptyIndex] = item
         taskPoolItems.remove(at: poolIndex)
         save()
@@ -181,6 +215,10 @@ public final class TodoStore: ObservableObject {
         }
 
         taskPoolItems[index].title = rawTitle
+        if rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            taskPoolItems[index].isCompleted = false
+            taskPoolItems[index].alarmAt = nil
+        }
         save()
     }
 
@@ -196,6 +234,72 @@ public final class TodoStore: ObservableObject {
         }
 
         taskPoolItems[index].isCompleted.toggle()
+        if taskPoolItems[index].isCompleted {
+            taskPoolItems[index].alarmAt = nil
+        }
+        save()
+    }
+
+    public func toggleTaskPoolHighlight(id: TodoItem.ID) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        taskPoolItems[index].isHighlighted.toggle()
+        save()
+    }
+
+    public func setTaskPoolAlarm(id: TodoItem.ID, alarmAt: Date) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        taskPoolItems[index].alarmAt = alarmAt
+        save()
+    }
+
+    public func clearTaskPoolAlarm(id: TodoItem.ID) {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        taskPoolItems[index].alarmAt = nil
+        save()
+    }
+
+    public func moveTaskPoolItemToTop(id: TodoItem.ID) {
+        guard let currentIndex = taskPoolItems.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        guard currentIndex > 0 else {
+            return
+        }
+
+        let item = taskPoolItems.remove(at: currentIndex)
+        taskPoolItems.insert(item, at: 0)
+        save()
+    }
+
+    public func moveTaskPoolItemUp(id: TodoItem.ID) {
+        guard let currentIndex = taskPoolItems.firstIndex(where: { $0.id == id }),
+              currentIndex > 0
+        else {
+            return
+        }
+
+        taskPoolItems.swapAt(currentIndex, currentIndex - 1)
+        save()
+    }
+
+    public func moveTaskPoolItemDown(id: TodoItem.ID) {
+        guard let currentIndex = taskPoolItems.firstIndex(where: { $0.id == id }),
+              currentIndex < taskPoolItems.count - 1
+        else {
+            return
+        }
+
+        taskPoolItems.swapAt(currentIndex, currentIndex + 1)
         save()
     }
 
@@ -217,7 +321,6 @@ public final class TodoStore: ObservableObject {
             let directory = persistenceURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let state = TodoPersistenceState(
-                todayKey: todayKey,
                 todayItems: todayItems,
                 taskPoolItems: taskPoolItems
             )
@@ -241,7 +344,6 @@ public final class TodoStore: ObservableObject {
 
             let legacyItems = try decoder.decode([TodoItem].self, from: data)
             return TodoPersistenceState(
-                todayKey: "",
                 todayItems: [],
                 taskPoolItems: Array(legacyItems.prefix(Self.taskPoolLimit))
             )
@@ -259,21 +361,31 @@ public final class TodoStore: ObservableObject {
         TodoItem(title: "")
     }
 
+    private func visibleTodayItems() -> [TodoItem] {
+        todayItems.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func reorderTodayVisibleItem(id: TodoItem.ID, destinationVisibleIndex: Int) {
+        var visibleItems = visibleTodayItems()
+        guard let currentIndex = visibleItems.firstIndex(where: { $0.id == id }),
+              currentIndex != destinationVisibleIndex,
+              destinationVisibleIndex >= 0,
+              destinationVisibleIndex < visibleItems.count
+        else {
+            return
+        }
+
+        let item = visibleItems.remove(at: currentIndex)
+        visibleItems.insert(item, at: destinationVisibleIndex)
+        let emptyCount = max(0, Self.baseTodayLimit - visibleItems.count)
+        todayItems = visibleItems + Self.emptyTodayItems(count: emptyCount)
+        save()
+    }
+
     private static func normalizedTodayItems(_ items: [TodoItem], limit: Int) -> [TodoItem] {
         let trimmedItems = Array(items.prefix(limit))
         let missingCount = max(0, limit - trimmedItems.count)
         return trimmedItems + emptyTodayItems(count: missingCount)
-    }
-
-    private static func dayKey(for date: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.year, .month, .day], from: date)
-        return [
-            components.year ?? 0,
-            components.month ?? 0,
-            components.day ?? 0,
-        ]
-        .map(String.init)
-        .joined(separator: "-")
     }
 
     public static func defaultPersistenceURL() -> URL? {
@@ -281,52 +393,29 @@ public final class TodoStore: ObservableObject {
             return nil
         }
 
-        let topToDoURL = applicationSupportURL
+        return applicationSupportURL
             .appendingPathComponent("TopToDo", isDirectory: true)
             .appendingPathComponent("todos.json")
-        let legacyURL = applicationSupportURL
-            .appendingPathComponent("iDo", isDirectory: true)
-            .appendingPathComponent("todos.json")
-
-        if !FileManager.default.fileExists(atPath: topToDoURL.path),
-           FileManager.default.fileExists(atPath: legacyURL.path)
-        {
-            do {
-                try FileManager.default.createDirectory(
-                    at: topToDoURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                try FileManager.default.copyItem(at: legacyURL, to: topToDoURL)
-            } catch {
-                assertionFailure("Unable to migrate todos from iDo to TopToDo: \(error)")
-            }
-        }
-
-        return topToDoURL
     }
 }
 
 private struct TodoPersistenceState: Codable {
-    var todayKey: String
     var todayItems: [TodoItem]
     var taskPoolItems: [TodoItem]
 
     private enum CodingKeys: String, CodingKey {
-        case todayKey
         case todayItems
         case taskPoolItems
         case topItems  // legacy key from pre-TaskPool renames
     }
 
-    init(todayKey: String, todayItems: [TodoItem], taskPoolItems: [TodoItem]) {
-        self.todayKey = todayKey
+    init(todayItems: [TodoItem], taskPoolItems: [TodoItem]) {
         self.todayItems = todayItems
         self.taskPoolItems = taskPoolItems
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.todayKey = try container.decode(String.self, forKey: .todayKey)
         self.todayItems = try container.decode([TodoItem].self, forKey: .todayItems)
         // Accept either the new "taskPoolItems" or the legacy "topItems" key so existing
         // user data migrates transparently across the rename.
@@ -341,7 +430,6 @@ private struct TodoPersistenceState: Codable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(todayKey, forKey: .todayKey)
         try container.encode(todayItems, forKey: .todayItems)
         try container.encode(taskPoolItems, forKey: .taskPoolItems)
     }

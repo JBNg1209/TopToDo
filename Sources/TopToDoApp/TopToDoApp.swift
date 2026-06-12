@@ -5,8 +5,15 @@ import AppKit
 @main
 struct TopToDoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = TodoStore()
+    @StateObject private var store: TodoStore
+    @StateObject private var alarmScheduler: AlarmScheduler
     @AppStorage("appFontSizeRawValue") private var fontSizeRawValue: String = FontSize.medium.rawValue
+
+    init() {
+        let store = TodoStore()
+        _store = StateObject(wrappedValue: store)
+        _alarmScheduler = StateObject(wrappedValue: AlarmScheduler(store: store))
+    }
 
     private var fontSize: FontSize {
         FontSize(rawValue: fontSizeRawValue) ?? .medium
@@ -16,6 +23,7 @@ struct TopToDoApp: App {
         WindowGroup("TopToDo") {
             TodoListView()
                 .environmentObject(store)
+                .environmentObject(alarmScheduler)
                 .environment(\.fontScale, fontSize.scale)
                 .frame(minWidth: 600, maxWidth: 600, minHeight: 520, idealHeight: 700)
         }

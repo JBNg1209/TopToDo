@@ -10,12 +10,12 @@ Pre-built DMG is available on the [Releases page](../../releases).
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| [TopToDo-1.1.0.dmg](../../releases/download/v1.1.0/TopToDo-1.1.0.dmg) | 933 KB | `30c51da611074dff7d9a2ce469b2c5f970c6f64734b0144c814c8dd5fc8b450d` |
+| [TopToDo-1.2.0.dmg](../../releases/download/v1.2.0/TopToDo-1.2.0.dmg) | 1.06 MB | `051a9f6a96dae150c5c1a4e40f2491318eb6764c584d66809234ac16bb246449` |
 
 Verify the download:
 
 ```sh
-shasum -a 256 TopToDo-1.0.0.dmg
+shasum -a 256 TopToDo-1.2.0.dmg
 ```
 
 After mounting the DMG, drag `TopToDo.app` into the Applications folder. The build is currently signed with an ad-hoc signature, so on first launch macOS will ask you to confirm in **System Settings → Privacy & Security**.
@@ -40,7 +40,7 @@ open dist/TopToDo.app
 ```sh
 BUILD_CONFIGURATION=release \
 BUNDLE_IDENTIFIER=com.example.TopToDo \
-MARKETING_VERSION=1.0.0 \
+MARKETING_VERSION=1.2.0 \
 BUNDLE_VERSION=1 \
 CODE_SIGN_IDENTITY="Developer ID Application: Example Team (TEAMID)" \
 make app
@@ -51,7 +51,7 @@ make app
 ```sh
 cd TopToDo
 swift run TopToDoValidation
-swift build
+swift build --product TopToDo
 ```
 
 ## Features
@@ -63,7 +63,7 @@ swift build
 - **Trilingual UI** — English / 简体中文 / 繁體中文.
 - **Adjustable font size** — Small / Medium / Large / Extra Large, applies to the whole app except the screen title.
 - **Adjustable language** — switchable from the top-right of the window, no relaunch needed.
-- **Persisted at** `~/Library/Application Support/TopToDo/todos.json.
+- **Persisted at** `~/Library/Application Support/TopToDo/todos.json`.
 
 ## Project Structure
 

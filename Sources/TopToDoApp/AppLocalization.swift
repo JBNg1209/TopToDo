@@ -315,6 +315,237 @@ struct AppStrings {
         }
     }
 
+    var highlightTaskHelp: String {
+        switch language {
+        case .english:
+            "Highlight task"
+        case .simplifiedChinese:
+            "高亮任务"
+        case .traditionalChinese:
+            "高亮任務"
+        }
+    }
+
+    var removeHighlightHelp: String {
+        switch language {
+        case .english:
+            "Remove highlight"
+        case .simplifiedChinese:
+            "取消高亮"
+        case .traditionalChinese:
+            "取消高亮"
+        }
+    }
+
+    var pinTaskHelp: String {
+        switch language {
+        case .english:
+            "Move task to top"
+        case .simplifiedChinese:
+            "置顶任务"
+        case .traditionalChinese:
+            "置頂任務"
+        }
+    }
+
+    var moreActionsHelp: String {
+        switch language {
+        case .english:
+            "More actions"
+        case .simplifiedChinese:
+            "更多操作"
+        case .traditionalChinese:
+            "更多操作"
+        }
+    }
+
+    var moveUpAction: String {
+        switch language {
+        case .english:
+            "Move Up"
+        case .simplifiedChinese:
+            "上移"
+        case .traditionalChinese:
+            "上移"
+        }
+    }
+
+    var moveDownAction: String {
+        switch language {
+        case .english:
+            "Move Down"
+        case .simplifiedChinese:
+            "下移"
+        case .traditionalChinese:
+            "下移"
+        }
+    }
+
+    var setReminderAction: String {
+        switch language {
+        case .english:
+            "Set Reminder..."
+        case .simplifiedChinese:
+            "设置提醒..."
+        case .traditionalChinese:
+            "設定提醒..."
+        }
+    }
+
+    var clearReminderAction: String {
+        switch language {
+        case .english:
+            "Clear Reminder"
+        case .simplifiedChinese:
+            "清除提醒"
+        case .traditionalChinese:
+            "清除提醒"
+        }
+    }
+
+    var reminderSetHelp: String {
+        switch language {
+        case .english:
+            "Reminder set"
+        case .simplifiedChinese:
+            "已设置提醒"
+        case .traditionalChinese:
+            "已設定提醒"
+        }
+    }
+
+    var reminderEditorTitle: String {
+        switch language {
+        case .english:
+            "Reminder"
+        case .simplifiedChinese:
+            "提醒"
+        case .traditionalChinese:
+            "提醒"
+        }
+    }
+
+    var reminderDateLabel: String {
+        switch language {
+        case .english:
+            "Date and Time"
+        case .simplifiedChinese:
+            "日期和时间"
+        case .traditionalChinese:
+            "日期和時間"
+        }
+    }
+
+    var reminderYearLabel: String {
+        switch language {
+        case .english:
+            "Year"
+        case .simplifiedChinese:
+            "年"
+        case .traditionalChinese:
+            "年"
+        }
+    }
+
+    var reminderMonthLabel: String {
+        switch language {
+        case .english:
+            "Month"
+        case .simplifiedChinese:
+            "月"
+        case .traditionalChinese:
+            "月"
+        }
+    }
+
+    var reminderDayLabel: String {
+        switch language {
+        case .english:
+            "Day"
+        case .simplifiedChinese:
+            "日"
+        case .traditionalChinese:
+            "日"
+        }
+    }
+
+    var reminderHourLabel: String {
+        switch language {
+        case .english:
+            "Hour"
+        case .simplifiedChinese:
+            "时"
+        case .traditionalChinese:
+            "時"
+        }
+    }
+
+    var reminderMinuteLabel: String {
+        switch language {
+        case .english:
+            "Minute"
+        case .simplifiedChinese:
+            "分"
+        case .traditionalChinese:
+            "分"
+        }
+    }
+
+    var saveButton: String {
+        switch language {
+        case .english:
+            "Save"
+        case .simplifiedChinese:
+            "保存"
+        case .traditionalChinese:
+            "保存"
+        }
+    }
+
+    var cancelButton: String {
+        switch language {
+        case .english:
+            "Cancel"
+        case .simplifiedChinese:
+            "取消"
+        case .traditionalChinese:
+            "取消"
+        }
+    }
+
+    var reminderMustBeFutureMessage: String {
+        switch language {
+        case .english:
+            "Choose a future date and time."
+        case .simplifiedChinese:
+            "请选择未来的日期和时间。"
+        case .traditionalChinese:
+            "請選擇未來的日期和時間。"
+        }
+    }
+
+    var reminderAlertTitle: String {
+        switch language {
+        case .english:
+            "Reminder"
+        case .simplifiedChinese:
+            "提醒"
+        case .traditionalChinese:
+            "提醒"
+        }
+    }
+
+    func reminderAlertMessage(taskTitle: String) -> String {
+        switch language {
+        case .english:
+            "It's time for \"\(taskTitle)\"."
+        case .simplifiedChinese:
+            "“\(taskTitle)” 到时间了。"
+        case .traditionalChinese:
+            "「\(taskTitle)」到時間了。"
+        }
+    }
+
     var moveToTaskPoolHelp: String {
         switch language {
         case .english:
@@ -340,22 +571,22 @@ struct AppStrings {
     var todayFullForMoveHelp: String {
         switch language {
         case .english:
-            "Today is full"
+            "Today Top5 is full"
         case .simplifiedChinese:
-            "今日已满"
+            "今日任务（5个）已满"
         case .traditionalChinese:
-            "今日已滿"
+            "今日任務（5個）已滿"
         }
     }
 
     var taskPoolFullHelp: String {
         switch language {
         case .english:
-            "Task Pool is full"
+            "Task Pool (30 tasks) is full"
         case .simplifiedChinese:
-            "任务池已满"
+            "任务池（30个）已满"
         case .traditionalChinese:
-            "任務池已滿"
+            "任務池（30個）已滿"
         }
     }
 
