@@ -10,12 +10,12 @@ Pre-built DMG is available on the [Releases page](../../releases).
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| [TopToDo-1.2.0.dmg](../../releases/download/v1.2.0/TopToDo-1.2.0.dmg) | 1.06 MB | `051a9f6a96dae150c5c1a4e40f2491318eb6764c584d66809234ac16bb246449` |
+| [TopToDo-1.3.0.dmg](../../releases/download/v1.3.0/TopToDo-1.3.0.dmg) | 946 KB | `3b34790ff5096bb69540aa1fb6385e73febd8c908128be597eded89fb0d312c2` |
 
 Verify the download:
 
 ```sh
-shasum -a 256 TopToDo-1.2.0.dmg
+shasum -a 256 TopToDo-1.3.0.dmg
 ```
 
 After mounting the DMG, drag `TopToDo.app` into the Applications folder. The build is currently signed with an ad-hoc signature, so on first launch macOS will ask you to confirm in **System Settings → Privacy & Security**.
@@ -23,7 +23,9 @@ After mounting the DMG, drag `TopToDo.app` into the Applications folder. The bui
 ## Requirements
 
 - macOS 14 or later
-- Swift 6.0 or later
+- Swift 6 Command Line Tools for reduced validation, or complete Xcode for the XCTest suite
+
+Run `make doctor` to check the local toolchain before building.
 
 ## Run
 
@@ -40,8 +42,8 @@ open dist/TopToDo.app
 ```sh
 BUILD_CONFIGURATION=release \
 BUNDLE_IDENTIFIER=com.example.TopToDo \
-MARKETING_VERSION=1.2.0 \
-BUNDLE_VERSION=1 \
+MARKETING_VERSION=1.3.0 \
+BUNDLE_VERSION=3 \
 CODE_SIGN_IDENTITY="Developer ID Application: Example Team (TEAMID)" \
 make app
 ```
@@ -50,9 +52,10 @@ make app
 
 ```sh
 cd TopToDo
-swift run TopToDoValidation
-swift build --product TopToDo
+make check
 ```
+
+`make check` runs formatting and architecture checks, SwiftPM unit tests, the framework-free smoke validation, a production build, and whitespace validation. Use `make check-clt` when only Command Line Tools are available. See the [development guide](docs/development.md) for details.
 
 ## Features
 
@@ -69,6 +72,8 @@ swift build --product TopToDo
 
 ```text
 TopToDo/
+├── AGENTS.md              # Entry point for coding agents
+├── docs/                  # Versioned project knowledge
 ├── Makefile
 ├── Package.swift
 ├── Scripts/
@@ -77,4 +82,15 @@ TopToDo/
 │   ├── TopToDoApp/        # SwiftUI macOS app
 │   ├── TopToDoCore/       # Todo model and store
 │   └── TopToDoValidation/ # Framework-free validation executable
+└── Tests/
+    └── TopToDoCoreTests/  # SwiftPM unit tests
 ```
+
+## Project documentation
+
+- [Product rules](docs/product.md)
+- [Architecture](docs/architecture.md)
+- [Development and validation](docs/development.md)
+- [Release process](docs/release.md)
+- [Roadmap](docs/roadmap.md)
+- [Changelog](docs/changelog.md)

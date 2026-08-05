@@ -33,7 +33,7 @@ expect(store.todayItems[0].alarmAt == nil, "Completing a Today task should clear
 store.completeTodayItem(id: firstTodayID)
 expect(!store.todayItems[0].isCompleted, "Completed Today task should toggle back to open")
 
-store.toggleTodayHighlight(id: firstTodayID)
+store.setTodayHighlight(id: firstTodayID, highlight: .red)
 expect(store.todayItems[0].isHighlighted, "Today highlight should toggle on")
 
 for index in 1 ..< TodoStore.baseTodayLimit {
@@ -52,7 +52,7 @@ expect(store.taskPoolItems.first?.isHighlighted == true, "Moved task should pres
 expect(store.todayItems.contains(where: { $0.id == firstTodayID }) == false, "Moved Today task should leave its original slot")
 
 let promotedID = store.addTaskPoolItem(title: "From task pool")!.id
-store.toggleTaskPoolHighlight(id: promotedID)
+store.setTaskPoolHighlight(id: promotedID, highlight: .blue)
 let promotedAlarm = Date().addingTimeInterval(7200)
 store.setTaskPoolAlarm(id: promotedID, alarmAt: promotedAlarm)
 expect(store.moveTaskPoolItemToToday(id: promotedID) != nil, "Task Pool task should move to Today when a Today slot is open")
@@ -101,21 +101,22 @@ let persistentStore = TodoStore(persistenceURL: file)
 let persistentTodayID = persistentStore.todayItems[0].id
 let persistentAlarm = Date().addingTimeInterval(5400)
 persistentStore.updateTodayTitle(id: persistentTodayID, title: "Keep tomorrow")
-persistentStore.toggleTodayHighlight(id: persistentTodayID)
+persistentStore.setTodayHighlight(id: persistentTodayID, highlight: .red)
 persistentStore.setTodayAlarm(id: persistentTodayID, alarmAt: persistentAlarm)
 let longTermID = persistentStore.addTaskPoolItem(title: "Keep me")!.id
-persistentStore.toggleTaskPoolHighlight(id: longTermID)
+persistentStore.setTaskPoolHighlight(id: longTermID, highlight: .blue)
 
 let savedJSON = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
 expect(!savedJSON.contains("todayKey"), "Saved state should not include date-based Today reset metadata")
-expect(savedJSON.contains("isHighlighted"), "Saved state should include highlight metadata")
+expect(savedJSON.contains("highlight"), "Saved state should include highlight metadata")
+expect(savedJSON.contains("updatedAt"), "Saved state should include last-modified metadata")
 expect(savedJSON.contains("alarmAt"), "Saved state should include reminder metadata")
 
 let reloadedStore = TodoStore(persistenceURL: file)
 expect(reloadedStore.todayItems[0].title == "Keep tomorrow", "Today tasks should persist across launches")
-expect(reloadedStore.todayItems[0].isHighlighted, "Today highlight should persist across launches")
+expect(reloadedStore.todayItems[0].highlight == .red, "Today highlight color should persist across launches")
 expectDate(reloadedStore.todayItems[0].alarmAt, isCloseTo: persistentAlarm, "Today reminder should persist across launches")
-expect(reloadedStore.taskPoolItems.first?.isHighlighted == true, "Task Pool highlight should persist across launches")
+expect(reloadedStore.taskPoolItems.first?.highlight == .blue, "Task Pool highlight color should persist across launches")
 
 let legacyJSON = """
 {

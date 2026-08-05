@@ -25,9 +25,9 @@ struct TopToDoApp: App {
                 .environmentObject(store)
                 .environmentObject(alarmScheduler)
                 .environment(\.fontScale, fontSize.scale)
-                .frame(minWidth: 600, maxWidth: 600, minHeight: 520, idealHeight: 700)
+                .frame(minWidth: 750, maxWidth: 750, minHeight: 520, idealHeight: 700)
         }
-        .defaultSize(width: 600, height: 700)
+        .defaultSize(width: 750, height: 700)
         .windowResizability(.contentSize)
         .commands {
             // Single-window app: hide the New menu group (New TopToDo Window, New Tab, ...).

@@ -178,6 +178,7 @@ struct TodoListView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help(strings.languageLabel)
+            .accessibilityIdentifier("settings.language")
         }
     }
 
@@ -201,6 +202,7 @@ struct TodoListView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help(strings.fontSizeLabel)
+        .accessibilityIdentifier("settings.fontSize")
     }
 
     private var tagPicker: some View {
@@ -209,6 +211,7 @@ struct TodoListView: View {
             labels: TodoTag.allCases.map { $0.title(using: strings) },
             width: 260
         )
+        .accessibilityIdentifier("tabs")
     }
 
     private var sloganBanner: some View {
@@ -235,6 +238,7 @@ struct TodoListView: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: metrics.bodySize))
                     .onSubmit(addTodayTask)
+                    .accessibilityIdentifier("today.newTaskInput")
 
                 Button(action: addTodayTask) {
                     Label(strings.newButton, systemImage: "plus")
@@ -242,11 +246,13 @@ struct TodoListView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(newTodayTitle.todoTrimmed.isEmpty)
+                .accessibilityIdentifier("today.addTask")
             }
 
             if visibleTodayItems.isEmpty {
                 ContentUnavailableView(strings.noTodayTasksTitle, systemImage: "tray", description: Text(strings.noTodayTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("today.emptyState")
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.standardSpacing) {
@@ -269,8 +275,8 @@ struct TodoListView: View {
                                         store.moveTodayItemToTaskPool(id: item.id)
                                     }
                                 },
-                                onToggleHighlight: {
-                                    store.toggleTodayHighlight(id: item.id)
+                                onSetHighlight: { highlight in
+                                    store.setTodayHighlight(id: item.id, highlight: highlight)
                                 },
                                 onMoveToTop: {
                                     store.moveTodayItemToTop(id: item.id)
@@ -311,6 +317,7 @@ struct TodoListView: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: metrics.bodySize))
                     .onSubmit(addTaskPoolTask)
+                    .accessibilityIdentifier("pool.newTaskInput")
 
                 Button(action: addTaskPoolTask) {
                     Label(strings.newButton, systemImage: "plus")
@@ -318,11 +325,13 @@ struct TodoListView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(newTaskPoolTitle.todoTrimmed.isEmpty)
+                .accessibilityIdentifier("pool.addTask")
             }
 
             if store.taskPoolItems.isEmpty {
                 ContentUnavailableView(strings.noTaskPoolTasksTitle, systemImage: "tray", description: Text(strings.noTaskPoolTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("pool.emptyState")
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.compactSpacing) {
@@ -345,8 +354,8 @@ struct TodoListView: View {
                                         store.moveTaskPoolItemToToday(id: item.id)
                                     }
                                 },
-                                onToggleHighlight: {
-                                    store.toggleTaskPoolHighlight(id: item.id)
+                                onSetHighlight: { highlight in
+                                    store.setTaskPoolHighlight(id: item.id, highlight: highlight)
                                 },
                                 onMoveToTop: {
                                     store.moveTaskPoolItemToTop(id: item.id)
@@ -449,7 +458,7 @@ private struct TodayTaskRow: View {
     let canMoveToTaskPool: Bool
     let onComplete: () -> Void
     let onMoveToTaskPool: () -> Void
-    let onToggleHighlight: () -> Void
+    let onSetHighlight: (TodoHighlight) -> Void
     let onMoveToTop: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -466,9 +475,11 @@ private struct TodayTaskRow: View {
                 placeholder: strings.todayTaskPlaceholder(index: displayIndex + 1),
                 title: $title,
                 isCompleted: item.isCompleted,
-                isHighlighted: item.isHighlighted,
+                highlight: item.highlight,
+                updatedAt: item.updatedAt,
                 metrics: metrics,
                 isEditing: $isEditing,
+                accessibilityIdentifier: "today.task.\(displayIndex).title",
                 onCommit: commitEdit
             )
 
@@ -478,6 +489,7 @@ private struct TodayTaskRow: View {
 
             TaskMoreMenu(
                 strings: strings,
+                accessibilityIdentifier: "today.task.\(displayIndex).more",
                 canMoveUp: displayIndex > 0,
                 canMoveDown: displayIndex < itemCount - 1,
                 hasAlarm: item.alarmAt != nil,
@@ -489,6 +501,7 @@ private struct TodayTaskRow: View {
             )
         }
         .frame(height: metrics.rowHeight)
+        .accessibilityIdentifier("today.task.\(displayIndex)")
         .onAppear {
             title = item.title
             if editingId == item.id {
@@ -520,6 +533,8 @@ private struct TodayTaskRow: View {
         }
         .buttonStyle(.plain)
         .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+        .accessibilityLabel(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+        .accessibilityIdentifier("today.task.\(displayIndex).complete")
     }
 
     private var visibleActions: some View {
@@ -527,6 +542,7 @@ private struct TodayTaskRow: View {
             HoverHelpIconButton(
                 helpText: canMoveToTaskPool ? strings.moveToTaskPoolHelp : strings.taskPoolFullHelp,
                 isEnabled: canMoveToTaskPool,
+                accessibilityIdentifier: "today.task.\(displayIndex).moveToPool",
                 label: {
                     Image(systemName: "arrow.right")
                 },
@@ -535,12 +551,12 @@ private struct TodayTaskRow: View {
                 }
             )
 
-            Button(action: onToggleHighlight) {
-                Image(systemName: item.isHighlighted ? "flag.fill" : "flag")
-                    .foregroundStyle(item.isHighlighted ? Color.red : Color.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(item.isHighlighted ? strings.removeHighlightHelp : strings.highlightTaskHelp)
+            TaskHighlightMenu(
+                highlight: item.highlight,
+                strings: strings,
+                accessibilityIdentifier: "today.task.\(displayIndex).highlight",
+                onSelect: onSetHighlight
+            )
 
             Button(action: onMoveToTop) {
                 Image(systemName: "arrow.up.to.line")
@@ -548,6 +564,8 @@ private struct TodayTaskRow: View {
             .buttonStyle(.borderless)
             .disabled(displayIndex == 0)
             .help(strings.pinTaskHelp)
+            .accessibilityLabel(strings.pinTaskHelp)
+            .accessibilityIdentifier("today.task.\(displayIndex).moveToTop")
         }
     }
 
@@ -583,7 +601,7 @@ private struct TaskPoolTaskRow: View {
     let canMoveToToday: Bool
     let onComplete: () -> Void
     let onMoveToToday: () -> Void
-    let onToggleHighlight: () -> Void
+    let onSetHighlight: (TodoHighlight) -> Void
     let onMoveToTop: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -600,9 +618,11 @@ private struct TaskPoolTaskRow: View {
                 placeholder: strings.taskPlaceholder,
                 title: $title,
                 isCompleted: item.isCompleted,
-                isHighlighted: item.isHighlighted,
+                highlight: item.highlight,
+                updatedAt: item.updatedAt,
                 metrics: metrics,
                 isEditing: $isEditing,
+                accessibilityIdentifier: "pool.task.\(displayIndex).title",
                 onCommit: commitEdit
             )
 
@@ -612,6 +632,7 @@ private struct TaskPoolTaskRow: View {
 
             TaskMoreMenu(
                 strings: strings,
+                accessibilityIdentifier: "pool.task.\(displayIndex).more",
                 canMoveUp: displayIndex > 0,
                 canMoveDown: displayIndex < itemCount - 1,
                 hasAlarm: item.alarmAt != nil,
@@ -623,6 +644,7 @@ private struct TaskPoolTaskRow: View {
             )
         }
         .frame(height: metrics.rowHeight)
+        .accessibilityIdentifier("pool.task.\(displayIndex)")
         .onAppear {
             title = item.title
             if editingId == item.id {
@@ -654,6 +676,8 @@ private struct TaskPoolTaskRow: View {
         }
         .buttonStyle(.plain)
         .help(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+        .accessibilityLabel(item.isCompleted ? strings.markAsOpenHelp : strings.completeTaskHelp)
+        .accessibilityIdentifier("pool.task.\(displayIndex).complete")
     }
 
     private var visibleActions: some View {
@@ -661,6 +685,7 @@ private struct TaskPoolTaskRow: View {
             HoverHelpIconButton(
                 helpText: canMoveToToday ? strings.moveToTodayHelp : strings.todayFullForMoveHelp,
                 isEnabled: canMoveToToday,
+                accessibilityIdentifier: "pool.task.\(displayIndex).moveToToday",
                 label: {
                     Image(systemName: "arrow.left")
                 },
@@ -669,12 +694,12 @@ private struct TaskPoolTaskRow: View {
                 }
             )
 
-            Button(action: onToggleHighlight) {
-                Image(systemName: item.isHighlighted ? "flag.fill" : "flag")
-                    .foregroundStyle(item.isHighlighted ? Color.red : Color.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(item.isHighlighted ? strings.removeHighlightHelp : strings.highlightTaskHelp)
+            TaskHighlightMenu(
+                highlight: item.highlight,
+                strings: strings,
+                accessibilityIdentifier: "pool.task.\(displayIndex).highlight",
+                onSelect: onSetHighlight
+            )
 
             Button(action: onMoveToTop) {
                 Image(systemName: "arrow.up.to.line")
@@ -682,6 +707,8 @@ private struct TaskPoolTaskRow: View {
             .buttonStyle(.borderless)
             .disabled(displayIndex == 0)
             .help(strings.pinTaskHelp)
+            .accessibilityLabel(strings.pinTaskHelp)
+            .accessibilityIdentifier("pool.task.\(displayIndex).moveToTop")
         }
     }
 
@@ -708,9 +735,11 @@ private struct EditableTaskTitle: View {
     let placeholder: String
     @Binding var title: String
     let isCompleted: Bool
-    let isHighlighted: Bool
+    let highlight: TodoHighlight
+    let updatedAt: Date
     let metrics: AppMetrics
     @Binding var isEditing: Bool
+    let accessibilityIdentifier: String
     let onCommit: () -> Void
 
     @FocusState private var internalFocus: Bool
@@ -720,46 +749,47 @@ private struct EditableTaskTitle: View {
             return .secondary
         }
 
-        if isHighlighted {
-            return isCompleted ? Color.red.opacity(0.7) : .red
+        if highlight == .none {
+            return isCompleted ? .secondary : .primary
         }
 
-        return isCompleted ? .secondary : .primary
+        return isCompleted ? highlight.color.opacity(0.65) : highlight.color
     }
 
     var body: some View {
-        Group {
-            if isEditing {
-                TextField(placeholder, text: $title)
-                    .focused($internalFocus)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: metrics.bodySize))
-                    .strikethrough(isCompleted)
-                    .foregroundStyle(titleColor)
-                    .onSubmit {
-                        finishEditing()
-                    }
-                    .task {
-                        try? await Task.sleep(for: .milliseconds(20))
-                        if isEditing, !internalFocus {
-                            internalFocus = true
+        VStack(alignment: .leading, spacing: 2) {
+            Group {
+                if isEditing {
+                    TextField(placeholder, text: $title)
+                        .focused($internalFocus)
+                        .textFieldStyle(.plain)
+                        .onSubmit { finishEditing() }
+                        .task {
+                            try? await Task.sleep(for: .milliseconds(20))
+                            if isEditing, !internalFocus {
+                                internalFocus = true
+                            }
                         }
-                    }
-            } else {
-                Text(title.isEmpty ? placeholder : title)
-                    .lineLimit(1)
-                    .font(.system(size: metrics.bodySize))
-                    .foregroundStyle(titleColor)
-                    .strikethrough(isCompleted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    isEditing = true
+                } else {
+                    Text(title.isEmpty ? placeholder : title)
+                        .lineLimit(1)
+                        .contentShape(Rectangle())
+                        .onTapGesture { isEditing = true }
                 }
             }
+            .font(.system(size: metrics.bodySize))
+            .foregroundStyle(titleColor)
+            .strikethrough(isCompleted)
+            .accessibilityIdentifier(accessibilityIdentifier)
+
+            Text(updatedAt.todoTimestamp)
+                .font(.system(size: metrics.captionSize))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .accessibilityLabel(updatedAt.todoTimestamp)
         }
         .frame(maxWidth: .infinity, minHeight: metrics.minEditHeight, alignment: .leading)
+        .layoutPriority(1)
         .onChange(of: isEditing) { _, newValue in
             internalFocus = newValue
         }
@@ -776,8 +806,90 @@ private struct EditableTaskTitle: View {
     }
 }
 
+private struct TaskHighlightMenu: View {
+    let highlight: TodoHighlight
+    let strings: AppStrings
+    let accessibilityIdentifier: String
+    let onSelect: (TodoHighlight) -> Void
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: highlight == .none ? "flag" : "flag.fill")
+                .foregroundStyle(highlight == .none ? Color.secondary : highlight.color)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(TodoHighlight.allCases, id: \.self) { option in
+                    Button {
+                        onSelect(option)
+                        isPresented = false
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: option.symbolName)
+                                .foregroundStyle(option.menuColor)
+                                .frame(width: 18)
+                            Text(strings.highlightName(option))
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 12)
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.secondary)
+                                .opacity(option == highlight ? 1 : 0)
+                        }
+                        .frame(width: 150, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .accessibilityLabel(strings.highlightName(option))
+                    .accessibilityIdentifier("\(accessibilityIdentifier).\(option.rawValue)")
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .help(strings.highlightTaskHelp)
+        .accessibilityLabel(strings.highlightTaskHelp)
+        .accessibilityIdentifier(accessibilityIdentifier)
+    }
+}
+
+private extension TodoHighlight {
+    var color: Color {
+        switch self {
+        case .none: .primary
+        case .red: .red
+        case .gray: .gray
+        case .blue: .blue
+        }
+    }
+
+    var symbolName: String {
+        self == .none ? "flag.slash" : "flag.fill"
+    }
+
+    var menuColor: Color {
+        self == .none ? .secondary : color
+    }
+}
+
+private extension Date {
+    var todoTimestamp: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.string(from: self)
+    }
+}
+
 private struct TaskMoreMenu: View {
     let strings: AppStrings
+    let accessibilityIdentifier: String
     let canMoveUp: Bool
     let canMoveDown: Bool
     let hasAlarm: Bool
@@ -815,12 +927,15 @@ private struct TaskMoreMenu: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help(strings.moreActionsHelp)
+        .accessibilityLabel(strings.moreActionsHelp)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 
 private struct HoverHelpIconButton<Label: View>: View {
     let helpText: String
     let isEnabled: Bool
+    let accessibilityIdentifier: String
     @ViewBuilder let label: () -> Label
     let action: () -> Void
 
@@ -836,6 +951,8 @@ private struct HoverHelpIconButton<Label: View>: View {
             }
             .buttonStyle(.borderless)
             .disabled(!isEnabled)
+            .accessibilityLabel(helpText)
+            .accessibilityIdentifier(accessibilityIdentifier)
 
             if !isEnabled {
                 Color.clear
@@ -1053,6 +1170,7 @@ private struct NativeSegmentedPicker: NSViewRepresentable {
         control.segmentStyle = .rounded
         control.segmentDistribution = .fillEqually
         control.frame = NSRect(x: 0, y: 0, width: width, height: 25)
+        control.setAccessibilityIdentifier("tabs")
         return control
     }
 

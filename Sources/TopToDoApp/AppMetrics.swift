@@ -60,7 +60,7 @@ struct AppMetrics {
     var tagPickerSpacing: CGFloat { 6 * scale }
 
     // MARK: Frame sizes
-    var rowHeight: CGFloat { 32 * scale }
+    var rowHeight: CGFloat { 46 * scale }
     var minEditHeight: CGFloat { 24 * scale }
 
     // MARK: Font sizes (macOS default points)

@@ -24,5 +24,9 @@ let package = Package(
             name: "TopToDoValidation",
             dependencies: ["TopToDoCore"]
         ),
+        .testTarget(
+            name: "TopToDoCoreTests",
+            dependencies: ["TopToDoCore"]
+        ),
     ]
 )

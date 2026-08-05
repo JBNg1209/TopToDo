@@ -1,4 +1,5 @@
 import Foundation
+import TopToDoCore
 
 enum AppLanguage: String, CaseIterable, Identifiable {
     case english = "en"
@@ -334,6 +335,23 @@ struct AppStrings {
             "取消高亮"
         case .traditionalChinese:
             "取消高亮"
+        }
+    }
+
+    func highlightName(_ highlight: TodoHighlight) -> String {
+        switch (language, highlight) {
+        case (.english, .none): "No highlight"
+        case (.english, .red): "Red"
+        case (.english, .gray): "Gray"
+        case (.english, .blue): "Blue"
+        case (.simplifiedChinese, .none): "无高亮"
+        case (.simplifiedChinese, .red): "红色"
+        case (.simplifiedChinese, .gray): "灰色"
+        case (.simplifiedChinese, .blue): "蓝色"
+        case (.traditionalChinese, .none): "無高亮"
+        case (.traditionalChinese, .red): "紅色"
+        case (.traditionalChinese, .gray): "灰色"
+        case (.traditionalChinese, .blue): "藍色"
         }
     }
 

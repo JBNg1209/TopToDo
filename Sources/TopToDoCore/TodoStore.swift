@@ -59,11 +59,20 @@ public final class TodoStore: ObservableObject {
     }
 
     public func updateTodayTitle(id: TodoItem.ID, title rawTitle: String) {
-        guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
+        guard let index = todayItems.firstIndex(where: { $0.id == id }),
+              todayItems[index].title != rawTitle
+        else {
             return
         }
 
+        let now = Date()
+        if todayItems[index].title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            todayItems[index].createdAt = now
+        }
         todayItems[index].title = rawTitle
+        todayItems[index].updatedAt = now
         if rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             todayItems[index].isCompleted = false
             todayItems[index].alarmAt = nil
@@ -89,12 +98,12 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
-    public func toggleTodayHighlight(id: TodoItem.ID) {
+    public func setTodayHighlight(id: TodoItem.ID, highlight: TodoHighlight) {
         guard let index = todayItems.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        todayItems[index].isHighlighted.toggle()
+        todayItems[index].highlight = highlight
         save()
     }
 
@@ -210,11 +219,14 @@ public final class TodoStore: ObservableObject {
     }
 
     public func updateTaskPoolTitle(id: TodoItem.ID, title rawTitle: String) {
-        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
+        guard let index = taskPoolItems.firstIndex(where: { $0.id == id }),
+              taskPoolItems[index].title != rawTitle
+        else {
             return
         }
 
         taskPoolItems[index].title = rawTitle
+        taskPoolItems[index].updatedAt = Date()
         if rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             taskPoolItems[index].isCompleted = false
             taskPoolItems[index].alarmAt = nil
@@ -240,12 +252,12 @@ public final class TodoStore: ObservableObject {
         save()
     }
 
-    public func toggleTaskPoolHighlight(id: TodoItem.ID) {
+    public func setTaskPoolHighlight(id: TodoItem.ID, highlight: TodoHighlight) {
         guard let index = taskPoolItems.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        taskPoolItems[index].isHighlighted.toggle()
+        taskPoolItems[index].highlight = highlight
         save()
     }
 
@@ -388,7 +400,16 @@ public final class TodoStore: ObservableObject {
         return trimmedItems + emptyTodayItems(count: missingCount)
     }
 
-    public static func defaultPersistenceURL() -> URL? {
+    public static func defaultPersistenceURL(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL? {
+        if let configuredPath = environment["TOPTODO_PERSISTENCE_URL"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !configuredPath.isEmpty
+        {
+            return URL(fileURLWithPath: configuredPath)
+        }
+
         guard let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
