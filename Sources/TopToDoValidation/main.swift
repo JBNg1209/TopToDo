@@ -21,6 +21,9 @@ let store = TodoStore(persistenceURL: nil)
 
 expect(store.todayItems.count == TodoStore.baseTodayLimit, "Today should start with 5 slots")
 expect(store.todayItems.allSatisfy(\.title.isEmpty), "Today slots should start blank")
+expect(TodoSearch.matches(title: "Prepare Sales Report", query: "sales"), "Search should match title text case-insensitively")
+expect(!TodoSearch.matches(title: "Prepare Sales Report", query: "meeting"), "Search should reject titles without a match")
+expect(TodoSearch.matches(title: "Any task", query: "  "), "Blank search should show all tasks")
 
 let firstTodayID = store.todayItems[0].id
 store.updateTodayTitle(id: firstTodayID, title: "  Buy milk  ")

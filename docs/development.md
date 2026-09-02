@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - macOS 14 or later.
-- A complete Xcode installation with a Swift 6 toolchain. Command Line Tools alone does not contain XCTest.
+- Swift 6 Command Line Tools for building and framework-free validation.
+- A complete Xcode installation is additionally required for the XCTest suite.
 
 Before the first build, run:
 
@@ -49,4 +50,4 @@ The script requires macOS Accessibility permission for the shell or terminal run
 
 ## Toolchain failures
 
-If `make doctor`, `make test`, or `make build` reports that the SDK was built by a different compiler version, select a matching complete Xcode installation with `xcode-select` or repair/reinstall Xcode. Do not work around a mismatched toolchain by changing product source files.
+If `make doctor`, `make test`, or `make build` reports that the SDK was built by a different compiler version, select a matching complete Xcode installation with `xcode-select` or repair/reinstall the command-line tools. Do not work around a mismatched toolchain by changing product source files.

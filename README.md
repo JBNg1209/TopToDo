@@ -10,12 +10,12 @@ Pre-built DMG is available on the [Releases page](../../releases).
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| [TopToDo-1.3.0.dmg](../../releases/download/v1.3.0/TopToDo-1.3.0.dmg) | 946 KB | `3b34790ff5096bb69540aa1fb6385e73febd8c908128be597eded89fb0d312c2` |
+| [TopToDo-1.3.2.dmg](../../releases/download/v1.3.2/TopToDo-1.3.2.dmg) | 747 KB | `caf6dbd16aa57bf9aa312977191981bb647ea04e319eaa23c02d33b143a94197` |
 
 Verify the download:
 
 ```sh
-shasum -a 256 TopToDo-1.3.0.dmg
+shasum -a 256 TopToDo-1.3.2.dmg
 ```
 
 After mounting the DMG, drag `TopToDo.app` into the Applications folder. The build is currently signed with an ad-hoc signature, so on first launch macOS will ask you to confirm in **System Settings → Privacy & Security**.
@@ -42,8 +42,8 @@ open dist/TopToDo.app
 ```sh
 BUILD_CONFIGURATION=release \
 BUNDLE_IDENTIFIER=com.example.TopToDo \
-MARKETING_VERSION=1.3.0 \
-BUNDLE_VERSION=3 \
+MARKETING_VERSION=1.3.2 \
+BUNDLE_VERSION=5 \
 CODE_SIGN_IDENTITY="Developer ID Application: Example Team (TEAMID)" \
 make app
 ```

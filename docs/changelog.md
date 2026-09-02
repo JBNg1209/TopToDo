@@ -2,6 +2,11 @@
 
 All notable user-facing or maintenance-relevant changes are recorded here.
 
+## 1.3.2
+
+- Added current-tab task search with live title matching, clear search, and no-results feedback.
+- Upgraded the default build version to 1.3.2 (build 5).
+
 ## 1.3.0
 
 - Added gray and blue task highlights alongside the existing red highlight.

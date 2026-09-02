@@ -102,4 +102,13 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertGreaterThan(store.todayItems[0].createdAt, oldDate)
         XCTAssertEqual(store.todayItems[0].updatedAt, store.todayItems[0].createdAt)
     }
+
+    func testSearchMatchesTitleWithoutCaseSensitivity() {
+        XCTAssertTrue(TodoSearch.matches(title: "Prepare Sales Report", query: "sales"))
+        XCTAssertFalse(TodoSearch.matches(title: "Prepare Sales Report", query: "meeting"))
+    }
+
+    func testSearchTreatsBlankQueryAsShowingAllTasks() {
+        XCTAssertTrue(TodoSearch.matches(title: "Any task", query: "  "))
+    }
 }

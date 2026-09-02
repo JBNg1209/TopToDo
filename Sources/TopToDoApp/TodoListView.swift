@@ -50,6 +50,8 @@ struct TodoListView: View {
     @State private var editingTodayId: UUID?
     @State private var editingTaskPoolId: UUID?
     @State private var reminderEditor: ReminderEditorState?
+    @State private var searchText = ""
+    @FocusState private var isSearchFieldFocused: Bool
 
     private var language: AppLanguage {
         AppLanguage(rawValue: selectedLanguageCode) ?? .english
@@ -89,10 +91,18 @@ struct TodoListView: View {
         store.todayItems.filter { !$0.title.todoTrimmed.isEmpty }
     }
 
+    private var filteredTodayItems: [TodoItem] {
+        visibleTodayItems.filter { TodoSearch.matches(title: $0.title, query: searchText) }
+    }
+
+    private var filteredTaskPoolItems: [TodoItem] {
+        store.taskPoolItems.filter { TodoSearch.matches(title: $0.title, query: searchText) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: metrics.spaciousSpacing) {
             header
-            tagPicker
+            navigationAndSearch
             sloganBanner
 
             Group {
@@ -214,6 +224,52 @@ struct TodoListView: View {
         .accessibilityIdentifier("tabs")
     }
 
+    private var navigationAndSearch: some View {
+        HStack(spacing: metrics.standardSpacing) {
+            tagPicker
+            Spacer(minLength: 0)
+            searchField
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: metrics.tinySpacing) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField(strings.searchTasksPlaceholder, text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($isSearchFieldFocused)
+                .onExitCommand {
+                    searchText = ""
+                }
+                .accessibilityLabel(strings.searchTasksPlaceholder)
+                .accessibilityIdentifier("tasks.search")
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    isSearchFieldFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(strings.clearSearchHelp)
+                .accessibilityLabel(strings.clearSearchHelp)
+                .accessibilityIdentifier("tasks.clearSearch")
+            }
+        }
+        .padding(.horizontal, metrics.standardSpacing)
+        .frame(width: 240, height: 26)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        }
+    }
+
     private var sloganBanner: some View {
         HStack(spacing: metrics.standardSpacing) {
             Rectangle()
@@ -253,10 +309,16 @@ struct TodoListView: View {
                 ContentUnavailableView(strings.noTodayTasksTitle, systemImage: "tray", description: Text(strings.noTodayTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityIdentifier("today.emptyState")
+            } else if filteredTodayItems.isEmpty {
+                ContentUnavailableView(strings.noMatchingTasksTitle, systemImage: "magnifyingglass", description: Text(strings.noMatchingTasksDescription))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("today.noSearchResults")
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.standardSpacing) {
-                        ForEach(Array(visibleTodayItems.enumerated()), id: \.element.id) { index, item in
+                        ForEach(Array(visibleTodayItems.enumerated()).filter { _, item in
+                            TodoSearch.matches(title: item.title, query: searchText)
+                        }, id: \.element.id) { index, item in
                             TodayTaskRow(
                                 displayIndex: index,
                                 itemCount: visibleTodayItems.count,
@@ -332,10 +394,16 @@ struct TodoListView: View {
                 ContentUnavailableView(strings.noTaskPoolTasksTitle, systemImage: "tray", description: Text(strings.noTaskPoolTasksDescription))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityIdentifier("pool.emptyState")
+            } else if filteredTaskPoolItems.isEmpty {
+                ContentUnavailableView(strings.noMatchingTasksTitle, systemImage: "magnifyingglass", description: Text(strings.noMatchingTasksDescription))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("pool.noSearchResults")
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: metrics.compactSpacing) {
-                        ForEach(Array(store.taskPoolItems.enumerated()), id: \.element.id) { index, item in
+                        ForEach(Array(store.taskPoolItems.enumerated()).filter { _, item in
+                            TodoSearch.matches(title: item.title, query: searchText)
+                        }, id: \.element.id) { index, item in
                             TaskPoolTaskRow(
                                 displayIndex: index,
                                 itemCount: store.taskPoolItems.count,
@@ -544,7 +612,7 @@ private struct TodayTaskRow: View {
                 isEnabled: canMoveToTaskPool,
                 accessibilityIdentifier: "today.task.\(displayIndex).moveToPool",
                 label: {
-                    Image(systemName: "arrow.right")
+                    MoveActionIcon(direction: "arrow.right", isEnabled: canMoveToTaskPool)
                 },
                 action: {
                     onMoveToTaskPool()
@@ -687,7 +755,7 @@ private struct TaskPoolTaskRow: View {
                 isEnabled: canMoveToToday,
                 accessibilityIdentifier: "pool.task.\(displayIndex).moveToToday",
                 label: {
-                    Image(systemName: "arrow.left")
+                    MoveActionIcon(direction: "arrow.left", isEnabled: canMoveToToday)
                 },
                 action: {
                     onMoveToToday()
@@ -956,11 +1024,32 @@ private struct HoverHelpIconButton<Label: View>: View {
 
             if !isEnabled {
                 Color.clear
+                    // Keep the disabled visual overlay from intercepting hover events.
+                    .allowsHitTesting(false)
             }
         }
         .frame(width: hitSize, height: hitSize)
         .contentShape(Rectangle())
         .help(helpText)
+    }
+}
+
+private struct MoveActionIcon: View {
+    let direction: String
+    let isEnabled: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Image(systemName: direction)
+
+            if !isEnabled {
+                Image(systemName: "nosign")
+                    .font(.system(size: 10, weight: .semibold))
+                    .offset(x: 4, y: 4)
+            }
+        }
+        .foregroundStyle(.secondary)
+        .frame(width: 22, height: 22)
     }
 }
 

@@ -14,6 +14,7 @@ TopToDo is a deliberately small native macOS todo app built around a persistent 
 - Reordering is performed with explicit controls, not drag and drop.
 - Frequent row actions appear directly in this order: move to the other list, highlight, then move to top. Lower-frequency actions are placed in the more menu.
 - The app window has a fixed width of 750 points.
+- The search field filters task titles within the selected tab in real time. Search does not change task data, order, or capacity rules.
 - Blank titles are rejected during editing. The trash action is the deletion path.
 - Language and font-size preferences are local app preferences.
 - Reminders only fire while the app is running.

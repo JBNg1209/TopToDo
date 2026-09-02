@@ -52,6 +52,38 @@ struct AppStrings {
         }
     }
 
+    var searchTasksPlaceholder: String {
+        switch language {
+        case .english: "Search tasks"
+        case .simplifiedChinese: "搜索任务"
+        case .traditionalChinese: "搜尋任務"
+        }
+    }
+
+    var clearSearchHelp: String {
+        switch language {
+        case .english: "Clear search"
+        case .simplifiedChinese: "清除搜索"
+        case .traditionalChinese: "清除搜尋"
+        }
+    }
+
+    var noMatchingTasksTitle: String {
+        switch language {
+        case .english: "No matching tasks"
+        case .simplifiedChinese: "没有匹配的任务"
+        case .traditionalChinese: "沒有符合的任務"
+        }
+    }
+
+    var noMatchingTasksDescription: String {
+        switch language {
+        case .english: "Try a different search"
+        case .simplifiedChinese: "请尝试其他关键词"
+        case .traditionalChinese: "請嘗試其他關鍵字"
+        }
+    }
+
     var languageLabel: String {
         switch language {
         case .english:
